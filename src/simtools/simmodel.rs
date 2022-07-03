@@ -329,23 +329,6 @@ impl Model for TransFuncModel {
     }
 
     fn nextstate(&mut self, delta_t: f64) {
-        match self.model.solver { 
-            SolverType::Euler => self.euler_method(delta_t),
-            SolverType::RungeKutta => self.rungekutta_method(delta_t),
-        }
-    }
-}
-
-impl DEModel for TransFuncModel {
-    fn derivative_func(&self, x: &DMatrix<f64>) -> DMatrix<f64> {
-        self.model.derivative_func(x)
-    }
-
-    fn set_state(&mut self, newstate: DMatrix<f64>) {
-        self.model.set_state(newstate);
-    }
-
-    fn get_state(&self) -> &DMatrix<f64> {
-        self.model.get_state()   
+        self.model.nextstate(delta_t);
     }
 }
