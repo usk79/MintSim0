@@ -5,6 +5,10 @@ use crate::simtools::signal::{*};
 extern crate nalgebra as na;
 use na::{DMatrix};
 
+
+use anyhow::{Context};
+
+
 /// Modelトレイト
 pub trait Model {
     /// シミュレーション時間を1ステップ進める
@@ -71,16 +75,16 @@ impl SpaceStateModel {
     }
 
     // 伝達関数から状態空間モデルを生成する  ⇒　Fromトレイトでの実装に変更すること
-    pub fn from_tf<'a> (num: &'a [f64], den: &'a [f64], solvertype: SolverType) -> Result<Self, &'a str> {
+    pub fn from_tf<'a> (num: &'a [f64], den: &'a [f64], solvertype: SolverType) -> anyhow::Result<Self> {
         let sdim = den.len() - 1;
         let idim = 1;
         let odim = 1;
 
         if sdim < 1 {
-            return Err("次数が0になりました。")
+            return Err(anyhow!("次数が0になりました。"))
         }
         if num.len() > den.len() {
-            return Err("プロパーな伝達関数ではありません。")
+            return Err(anyhow!("プロパーな伝達関数ではありません。"))
         }
 
         let mut model = SpaceStateModel::new(sdim, idim, odim, solvertype);
@@ -104,7 +108,7 @@ impl SpaceStateModel {
             }
         }
 
-        model.set_mat_a(&mat_a);
+        model.set_mat_a(&mat_a).context("failed at from_tf()")?;
 
         // B行列の作成
         let mut mat_b = vec![0.0; sdim * idim];
@@ -123,24 +127,24 @@ impl SpaceStateModel {
             }
 
         }
-        model.set_mat_b(&mat_b);
+        model.set_mat_b(&mat_b).context("failed at from_tf()")?;
 
         // C行列の作成
         let mut mat_c = vec![0.0; sdim * odim];
         mat_c[sdim - 1] = 1.0;
-        model.set_mat_c(&mat_c);
+        model.set_mat_c(&mat_c).context("failed at from_tf()")?;
 
         // D行列の作成
-        let mut mat_d = vec![bn; odim * idim];
-        model.set_mat_d(&mat_d);
+        let mat_d = vec![bn; odim * idim];
+        model.set_mat_d(&mat_d).context("failed at from_tf()")?;
 
         Ok(model)
     }
 
-    pub fn init_state(&mut self, init_state: &[f64]) -> Result<(), &str> {
+    pub fn init_state(&mut self, init_state: &[f64]) -> anyhow::Result<()> {
 
         if init_state.len() != self.state_dim {
-            return Err("状態変数のサイズが違います。");
+            return Err(anyhow!("状態変数のサイズが違います。"));
         }
 
         for (i, elem) in init_state.iter().enumerate() {
@@ -150,10 +154,10 @@ impl SpaceStateModel {
         Ok(())
     }
 
-    pub fn set_mat_a(&mut self, mat_a: &[f64]) -> Result<(), &str> {
+    pub fn set_mat_a(&mut self, mat_a: &[f64]) -> anyhow::Result<()> {
 
         if mat_a.len() != self.state_dim * self.state_dim {
-            return Err("A行列のサイズが違います。");
+            return Err(anyhow!("A行列のサイズが違います。"));
         }
 
         for (i, elem) in mat_a.iter().enumerate() {
@@ -163,10 +167,10 @@ impl SpaceStateModel {
         Ok(())
     }
 
-    pub fn set_mat_b(&mut self, mat_b: &[f64]) -> Result<(), &str> {
+    pub fn set_mat_b(&mut self, mat_b: &[f64]) -> anyhow::Result<()> {
         
         if mat_b.len() != self.state_dim * self.input_dim {
-            return Err("B行列のサイズが違います。");
+            return Err(anyhow!("B行列のサイズが違います。"));
         }
 
         for (i, elem) in mat_b.iter().enumerate() {
@@ -176,10 +180,10 @@ impl SpaceStateModel {
         Ok(())
     }
 
-    pub fn set_mat_c(&mut self, mat_c: &[f64]) -> Result<(), &str> {
+    pub fn set_mat_c(&mut self, mat_c: &[f64]) -> anyhow::Result<()> {
 
         if mat_c.len() != self.output_dim * self.state_dim {
-            return Err("C行列のサイズが違います。");
+            return Err(anyhow!("C行列のサイズが違います。"));
         }
 
         for (i, elem) in mat_c.iter().enumerate() {
@@ -189,10 +193,10 @@ impl SpaceStateModel {
         Ok(())
     }
 
-    pub fn set_mat_d(&mut self, mat_d: &[f64]) -> Result<(), &str> {
+    pub fn set_mat_d(&mut self, mat_d: &[f64]) -> anyhow::Result<()> {
 
         if mat_d.len() != self.output_dim * self.input_dim {
-            return Err("D行列のサイズが違います。");
+            return Err(anyhow!("D行列のサイズが違います。"));
         }
 
         for (i, elem) in mat_d.iter().enumerate() {
@@ -202,9 +206,9 @@ impl SpaceStateModel {
         Ok(())
     }
 
-    pub fn set_x(&mut self, x: &[f64]) -> Result<(), &str> {
+    pub fn set_x(&mut self, x: &[f64]) -> anyhow::Result<()> {
         if x.len() != self.state_dim {
-            return Err("状態ベクトルの次数が違います。")
+            return Err(anyhow!("状態ベクトルの次数が違います。"))
         }
         for (i, elem) in x.iter().enumerate() {
             self.x[i] = *elem;
@@ -213,9 +217,9 @@ impl SpaceStateModel {
         Ok(())
     }
 
-    pub fn set_u(&mut self, u: &[f64]) -> Result<(), &str> {
+    pub fn set_u(&mut self, u: &[f64]) -> anyhow::Result<()> {
         if u.len() != self.input_dim {
-            return Err("入力ベクトルの次数が違います。")
+            return Err(anyhow!("入力ベクトルの次数が違います。"))
         }
         for (i, elem) in u.iter().enumerate() {
             self.u[i] = *elem;
@@ -318,8 +322,8 @@ impl TransFuncModel {
         }
     }
 
-    pub fn set_u(&mut self, u: f64) {
-        self.model.set_u(&vec![u]);
+    pub fn set_u(&mut self, u: f64) -> anyhow::Result<()> {
+        self.model.set_u(&vec![u])
     }
 }
 
@@ -330,5 +334,11 @@ impl Model for TransFuncModel {
 
     fn nextstate(&mut self, delta_t: f64) {
         self.model.nextstate(delta_t);
+    }
+}
+
+impl fmt::Display for TransFuncModel {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Transfer Function Model -- >> \n\tnum: {:?}\n\tden: {:?}\n", self.num, self.den)
     }
 }
