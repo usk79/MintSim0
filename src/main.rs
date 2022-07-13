@@ -12,7 +12,7 @@ fn main() {
     bus.push(signal::Signal::new(0.02, "current", "A"));
 
     //let model = SpaceStateModel::new(3, 1, 1, SolverType::Euler);
-    let model = TransFuncModel::new(&[1.0, 0.0], &[2.0, 1.0, 1.0], SolverType::Euler);
+    let model = TransFuncModel::new(&[1.0, 0.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();
 
     println!("{}", model);
 }

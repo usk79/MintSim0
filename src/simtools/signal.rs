@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::ops::Index;
 use std::ops::IndexMut;
 
-#[derive(Debug)]
+use anyhow::{Context};
+
+#[derive(Debug, Clone)]
 pub struct Signal {
     pub value: f64,   // 値
     name: String,     // 信号名
@@ -27,7 +29,7 @@ impl fmt::Display for Signal {
 }
 
 /// Busの定義
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Bus {
     signals: Vec<Signal>,
     keytable: HashMap<String, usize> // 名前からインデックスを検索するためのテーブル
@@ -42,13 +44,28 @@ impl Bus {
     }
 
     pub fn push(&mut self, signal: Signal) {
+        let keyname = signal.name.clone();
+        self.keytable.insert(keyname, self.signals.len());
         self.signals.push(signal);
-        // ここから
     }
 
-   /* pub fn get_by_name(&self, signame: impl Into<String>) -> &Signal {
-        // ここから
-    }*/
+    pub fn get_by_name(&self, signame: impl Into<String>) -> anyhow::Result<&Signal> {
+        match self.keytable.get(&signame.into()) {
+            Some(index) => {
+                Ok(&self.signals[*index])
+            },
+            None => Err(anyhow!("信号が存在しません。"))
+        }
+    }
+
+    pub fn get_by_name_mut(&mut self, signame: impl Into<String>) -> anyhow::Result<&mut Signal> {
+        match self.keytable.get(&signame.into()) {
+            Some(index) => {
+                Ok(&mut self.signals[*index])
+            },
+            None => Err(anyhow!("信号が存在しません。"))
+        }
+    }
 }
 
 impl Index<usize> for Bus
@@ -77,8 +94,11 @@ impl fmt::Display for Bus {
     }
 }
 
-#[test]
+#[cfg(test)]
 mod signal_test {
+    use super::*;
+
+    #[test]
     fn printtest() {
         // 表示するだけのテストなので cargo test -- --nocapture にて実行
         let a = Signal::new(0.0, "a", "A");
@@ -93,6 +113,7 @@ mod signal_test {
         println!("{}", list);
     }
 
+    #[test]
     fn busaccess_test() {
         let a = Signal::new(0.0, "a", "A");
         let b = Signal::new(1.0, "b", "A");
@@ -103,5 +124,13 @@ mod signal_test {
 
         assert_eq!(list[0].value, 0.0);
         assert_eq!(list[1].value, 1.0);
+
+        assert_eq!(list.get_by_name("a").unwrap().value, 0.0);
+
+        list.get_by_name_mut("a").unwrap().value = 3.0;
+        assert_eq!(list[0].value, 3.0);
+    
+        list[1].value = 2.0;
+        assert_eq!(list[1].value, 2.0);
     }
 }

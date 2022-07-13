@@ -13,7 +13,7 @@ use anyhow::{Context};
 pub trait Model {
     /// シミュレーション時間を1ステップ進める
     fn nextstate(&mut self, delta_t: f64);
-    fn output(&self) -> Bus;
+    fn output(&self) -> &Bus;
 }
 
 #[derive(Debug, Clone)]
@@ -55,7 +55,8 @@ pub struct SpaceStateModel {
     output_dim: usize,      // 出力次数
     x: DMatrix<f64>,        // 状態ベクトル
     u: DMatrix<f64>,        // 入力ベクトル
-    solver: SolverType,
+    solver: SolverType,     // ソルバータイプ
+    sigbus: Bus,            // シグナルバス
 }
 
 impl SpaceStateModel {
@@ -71,6 +72,7 @@ impl SpaceStateModel {
             input_dim: idim,
             output_dim: odim,
             solver: solvertype,
+            sigbus: Bus::new(),
         }
     }
 
@@ -232,17 +234,28 @@ impl SpaceStateModel {
         &self.mat_c * &self.x + &self.mat_d * &self.u
     }
 
+    pub fn set_sigbus(&mut self, list: Vec<Signal>) {
+        for sig in list.iter() {
+            self.sigbus.push(sig.clone()); // クローンしたけどほかに方法がありそう？
+        }
+    }
+
 }
 
 impl Model for SpaceStateModel {
-    fn output(&self) -> Bus {
-        Bus::new()
+    fn output(&self) -> &Bus {
+        &self.sigbus
     }
 
     fn nextstate(&mut self, delta_t: f64) {
         match self.solver { 
             SolverType::Euler => self.euler_method(delta_t),
             SolverType::RungeKutta => self.rungekutta_method(delta_t),
+        }
+
+        // 次のステップを計算した後、結果をバスに保存する
+        for (i, elem) in self.x.iter().enumerate() { 
+            self.sigbus[i].value = *elem;
         }
     }
 }
@@ -306,6 +319,7 @@ impl fmt::Display for SpaceStateModel {
 }
 
 /// 伝達関数モデル
+#[derive(Debug, Clone)]
 pub struct TransFuncModel {
     model: SpaceStateModel, // 内部的には状態空間モデルを持つ
     num: Vec<f64>,          // 分子多項式の係数 2次の例 b2 * s^2 + b1 * s + b0
@@ -313,13 +327,13 @@ pub struct TransFuncModel {
 }
 
 impl TransFuncModel {
-    pub fn new(num_coef: &[f64], den_coef: &[f64], solvertype: SolverType) -> Self {
-        let model = SpaceStateModel::from_tf(&num_coef, &den_coef, solvertype).unwrap();
-        Self {
+    pub fn new(num_coef: &[f64], den_coef: &[f64], solvertype: SolverType) -> anyhow::Result<Self> {
+        let model = SpaceStateModel::from_tf(&num_coef, &den_coef, solvertype).context("Failed to create Trasfer Function Model")?;
+        Ok(Self {
             num : num_coef.to_vec(),
             den : den_coef.to_vec(),  
             model : model,
-        }
+        })
     }
 
     pub fn set_u(&mut self, u: f64) -> anyhow::Result<()> {
@@ -328,8 +342,8 @@ impl TransFuncModel {
 }
 
 impl Model for TransFuncModel {
-    fn output(&self) -> Bus {
-        Bus::new()
+    fn output(&self) -> &Bus {
+        self.model.output()
     }
 
     fn nextstate(&mut self, delta_t: f64) {
