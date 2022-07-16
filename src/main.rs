@@ -1,8 +1,10 @@
 use mintsim::simtools;
 use simtools::{*};
 use simmodel::{*};
+use signal::{*};
 
 fn main() {
+    
     println!("{}\n", simconsts::G);
 
     println!("{}\n", signal::Signal::new(0.01, "current", "A"));

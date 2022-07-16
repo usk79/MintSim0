@@ -13,7 +13,7 @@ use anyhow::{Context};
 pub trait Model {
     /// シミュレーション時間を1ステップ進める
     fn nextstate(&mut self, delta_t: f64);
-    fn output(&self) -> &Bus;
+    fn output(&mut self) -> &Bus;
 }
 
 #[derive(Debug, Clone)]
@@ -243,7 +243,12 @@ impl SpaceStateModel {
 }
 
 impl Model for SpaceStateModel {
-    fn output(&self) -> &Bus {
+    fn output(&mut self) -> &Bus {
+        // 結果をバスに保存する
+        for (i, elem) in self.x.iter().enumerate() { 
+            self.sigbus[i].value = *elem;
+        }
+
         &self.sigbus
     }
 
@@ -251,11 +256,6 @@ impl Model for SpaceStateModel {
         match self.solver { 
             SolverType::Euler => self.euler_method(delta_t),
             SolverType::RungeKutta => self.rungekutta_method(delta_t),
-        }
-
-        // 次のステップを計算した後、結果をバスに保存する
-        for (i, elem) in self.x.iter().enumerate() { 
-            self.sigbus[i].value = *elem;
         }
     }
 }
@@ -342,7 +342,7 @@ impl TransFuncModel {
 }
 
 impl Model for TransFuncModel {
-    fn output(&self) -> &Bus {
+    fn output(&mut self) -> &Bus {
         self.model.output()
     }
 

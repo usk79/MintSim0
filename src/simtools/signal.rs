@@ -2,12 +2,13 @@ use std::fmt;
 use std::collections::HashMap;
 use std::ops::Index;
 use std::ops::IndexMut;
+use std::convert::From;
 
 use anyhow::{Context};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
-    pub value: f64,   // 値
+    pub value: f64,   // 値　値だけは自由に書き換えられるようにしている
     name: String,     // 信号名
     unit: String,     // 単位
 }
@@ -19,7 +20,17 @@ impl Signal {
             name: signame.into(),
             unit: sigunit.into(),
         }
-    }    
+    }
+    
+    /// nameアクセッサ
+    pub fn name<'a>(&'a self) -> &'a str {
+        &self.name
+    }
+
+    /// unitアクセッサ
+    pub fn unit<'a>(&'a self) -> &'a str {
+        &self.unit
+    }
 }
 
 impl fmt::Display for Signal {
@@ -68,6 +79,7 @@ impl Bus {
     }
 }
 
+/// Indexオペレータのオーバーロード
 impl Index<usize> for Bus
 {
     type Output = Signal;
@@ -82,6 +94,7 @@ impl IndexMut<usize> for Bus
     }
 }
 
+/// Displayトレイとの実装
 impl fmt::Display for Bus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut liststr = String::new();
@@ -94,16 +107,47 @@ impl fmt::Display for Bus {
     }
 }
 
+/// Fromトレイトの実装
+impl From<Vec<Signal>> for Bus {
+    fn from(signals: Vec<Signal>) -> Self {
+        // keytableを事前に作成しておく
+        let mut keytable = HashMap::<String, usize>::new();
+
+        for (idx, sig) in signals.iter().enumerate() {
+            keytable.insert(sig.name.clone(), idx);
+        }
+
+        Self {
+            signals: signals,
+            keytable: keytable,
+        }
+    }
+}
+
+/// Iteratorトレイトの実装から再開
+
+
 #[cfg(test)]
 mod signal_test {
-    use super::*;
+    use super::Signal;
+    use super::Bus;
+
+    #[test]
+    fn signaltest() {
+        let sig = Signal::new(0.0, "a", "A");
+
+        assert_eq!(sig.value, 0.0);
+        assert_eq!(sig.name(), "a");
+        assert_eq!(sig.unit(), "A");
+    }
 
     #[test]
     fn printtest() {
         // 表示するだけのテストなので cargo test -- --nocapture にて実行
-        let a = Signal::new(0.0, "a", "A");
+        let a = Signal::new(0.0, "motor_current", "A");
 
-        println!("{}", a);
+        println!("{}\n", a);
+        println!("signal name is {}\n", a.name());
 
         let b = Signal::new(1.0, "b", "A");
 
@@ -132,5 +176,23 @@ mod signal_test {
     
         list[1].value = 2.0;
         assert_eq!(list[1].value, 2.0);
+    }
+
+    #[test]
+    fn buscreate_test() {
+        let sigvec = vec![
+            Signal::new(0.0, "motor_trq", "Nm"),
+            Signal::new(0.0, "motor_volt", "V"),
+            Signal::new(0.0, "motor_current", "A"),
+        ];
+        let copiedsig = sigvec.clone();
+
+        //let bus:Bus = signals.into();　// Bus::fromと同じ意味
+        let bus = Bus::from(sigvec);
+
+        for (idx, _sig) in copiedsig.iter().enumerate() {
+            assert_eq!(bus[idx], copiedsig[idx]);
+        }
+        
     }
 }
