@@ -17,4 +17,13 @@ fn main() {
     let model = TransFuncModel::new(&[1.0, 0.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();
 
     println!("{}", model);
+
+    let tes = vec![0, 1, 2, 3];
+    let testitr = tes.iter();
+
+    print_typename(testitr);
+}
+
+fn print_typename<T>(_: T) {
+    println!("{}", std::any::type_name::<T>());
 }

@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::ops::Index;
 use std::ops::IndexMut;
 use std::convert::From;
+use core::slice::{Iter, IterMut};
 
 use anyhow::{Context};
 
@@ -77,6 +78,14 @@ impl Bus {
             None => Err(anyhow!("信号が存在しません。"))
         }
     }
+
+    pub fn iter(&self) -> BusIter {
+        self.signals.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> BusIterMut {
+        self.signals.iter_mut()
+    }
 }
 
 /// Indexオペレータのオーバーロード
@@ -124,8 +133,9 @@ impl From<Vec<Signal>> for Bus {
     }
 }
 
-/// Iteratorトレイトの実装から再開
-
+/// Busのイテレータオブジェクト実装
+type BusIter<'a> = Iter<'a, Signal>;
+type BusIterMut<'a> = IterMut<'a, Signal>;
 
 #[cfg(test)]
 mod signal_test {
@@ -194,5 +204,33 @@ mod signal_test {
             assert_eq!(bus[idx], copiedsig[idx]);
         }
         
+    }
+
+    #[test]
+    fn busiter_test() {
+        let sigvec = vec![
+            Signal::new(0.0, "motor_trq", "Nm"),
+            Signal::new(0.0, "motor_volt", "V"),
+            Signal::new(0.0, "motor_current", "A"),
+        ];
+
+        let mut bus = Bus::from(sigvec);
+
+        let mut busiter = bus.iter();
+        assert_eq!(busiter.next(), Some(&Signal::new(0.0, "motor_trq", "Nm")));
+        assert_eq!(busiter.next(), Some(&Signal::new(0.0, "motor_volt", "V")));
+        assert_eq!(busiter.next(), Some(&Signal::new(0.0, "motor_current", "A")));
+        assert_eq!(busiter.next(), None);
+
+        for (i, sig) in bus.iter_mut().enumerate() {
+            sig.value = i as f64;
+        }
+
+        let mut busiter_mut = bus.iter_mut();
+
+        assert_eq!(busiter_mut.next(), Some(&mut Signal::new(0.0, "motor_trq", "Nm")));
+        assert_eq!(busiter_mut.next(), Some(&mut Signal::new(1.0, "motor_volt", "V")));
+        assert_eq!(busiter_mut.next(), Some(&mut Signal::new(2.0, "motor_current", "A")));
+        assert_eq!(busiter_mut.next(), None);
     }
 }
