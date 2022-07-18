@@ -26,8 +26,12 @@ where T:Model
     }
 
     pub fn run_sim(&mut self) -> anyhow::Result<()> {
+        let printidx = self.stepnum / 10;
 
         for idx in 1..self.stepnum {
+            if idx % printidx == 0 {
+                println!("processing now ... {}%\n", (idx as f64 / self.stepnum as f64) * 100.0)
+            }
             self.model.nextstate(self.delta_t);
         }
 
