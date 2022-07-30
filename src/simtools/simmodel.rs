@@ -12,7 +12,8 @@ use anyhow::{Context};
 pub trait Model {
     /// シミュレーション時間を1ステップ進める
     fn nextstate(&mut self, delta_t: f64);
-    fn output(&mut self) -> &Bus;
+    fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()>;
+    fn interface_out(&mut self) -> &Bus;
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +43,8 @@ pub trait DEModel: Model{
     }
 }
 
+pub type SigDef = (&str, &str); // (信号名, 単位)
+
 /// 状態空間モデル
 #[derive(Debug, Clone)]
 pub struct SpaceStateModel {
@@ -49,13 +52,13 @@ pub struct SpaceStateModel {
     mtrx_b: DMatrix<f64>,    // 入力行列B
     mtrx_c: DMatrix<f64>,    // 観測行列C
     mtrx_d: DMatrix<f64>,    // 入力行列D
-    state_dim: usize,       // 状態次数
-    input_dim: usize,       // 入力次数
-    output_dim: usize,      // 出力次数
-    x: DMatrix<f64>,        // 状態ベクトル
-    u: DMatrix<f64>,        // 入力ベクトル
-    solver: SolverType,     // ソルバータイプ
-    sigbus: Bus,            // シグナルバス
+    state_dim: usize,        // 状態次数
+    input_dim: usize,        // 入力次数
+    output_dim: usize,       // 出力次数
+    x: DMatrix<f64>,         // 状態ベクトル
+    u: DMatrix<f64>,         // 入力ベクトル
+    solver: SolverType,      // ソルバータイプ
+    sigbus: Bus,             // シグナルバス
 }
 
 impl SpaceStateModel {
@@ -222,7 +225,11 @@ pub fn crate_ssm_from_tf<'a> (num: &'a [f64], den: &'a [f64], solvertype: Solver
 
 
 impl Model for SpaceStateModel {
-    fn output(&mut self) -> &Bus {
+    fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn interface_out(&mut self) -> &Bus {
         // 結果をバスに保存する
         self.x.iter().enumerate().for_each(|(i, elem)| self.sigbus[i].value = *elem);
 
@@ -319,8 +326,12 @@ impl TransFuncModel {
 }
 
 impl Model for TransFuncModel {
-    fn output(&mut self) -> &Bus {
-        self.model.output()
+    fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()> {
+        Ok(self.model.interface_in(signals)?)
+    }
+
+    fn interface_out(&mut self) -> &Bus {
+        self.model.interface_out()
     }
 
     fn nextstate(&mut self, delta_t: f64) {
