@@ -43,11 +43,12 @@ pub trait DEModel: Model{
     }
 }
 
-pub type SigDef = (&str, &str); // (信号名, 単位)
+pub type SigDef = (String, String); // (信号名, 単位)
 
 /// 状態空間モデル
 #[derive(Debug, Clone)]
 pub struct SpaceStateModel {
+    name: String,
     mtrx_a: DMatrix<f64>,    // 状態遷移行列A
     mtrx_b: DMatrix<f64>,    // 入力行列B
     mtrx_c: DMatrix<f64>,    // 観測行列C
@@ -58,16 +59,29 @@ pub struct SpaceStateModel {
     x: DMatrix<f64>,         // 状態ベクトル
     u: DMatrix<f64>,         // 入力ベクトル
     solver: SolverType,      // ソルバータイプ
-    sigbus: Bus,             // シグナルバス
+    state_bus: Bus, 
+    input_bus: Bus,
+    output_bus: Bus,
 }
 
 impl SpaceStateModel {
-    pub fn new(sdim: usize, idim: usize, odim: usize, solvertype: SolverType) -> anyhow::Result<Self> {
+    pub fn new(name: &str, state_def: Vec<SigDef>, input_def: Vec<SigDef>, output_def: Vec<SigDef>, solvertype: SolverType) -> anyhow::Result<Self> {
+        let sdim = state_def.len();
+        let idim = input_def.len();
+        let odim = output_def.len();
         if sdim <= 0 || idim <= 0 || odim <= 0 {
             return Err(anyhow!("状態, 入力, 出力の次数は自然数である必要があります。"));
         }
 
+        let mut state_bus = Bus::new();
+        state_def.iter().for_each(|(name, unit)| state_bus.push(Signal::new(0.0, name, unit)));
+        let mut input_bus = Bus::new();
+        input_def.iter().for_each(|(name, unit)| input_bus.push(Signal::new(0.0, name, unit)));
+        let mut output_bus = Bus::new();
+        input_def.iter().for_each(|(name, unit)| output_bus.push(Signal::new(0.0, name, unit)));
+
         Ok(SpaceStateModel {
+            name: name.to_string(),
             mtrx_a: DMatrix::from_element(sdim, sdim, 0.0),
             mtrx_b: DMatrix::from_element(sdim, idim, 0.0),
             mtrx_c: DMatrix::from_element(odim, sdim, 0.0),
@@ -78,7 +92,9 @@ impl SpaceStateModel {
             input_dim: idim,
             output_dim: odim,
             solver: solvertype,
-            sigbus: Bus::new(),
+            state_bus: state_bus,
+            input_bus: input_bus, 
+            output_bus: output_bus,
         })
     }
 
@@ -150,17 +166,23 @@ impl SpaceStateModel {
         &self.mtrx_c * &self.x + &self.mtrx_d * &self.u
     }
 
-    pub fn set_sigbus(&mut self, list: Vec<Signal>) {
-        list.into_iter().for_each(|sig| self.sigbus.push(sig));
+    fn get_statebus(&mut self) -> &Bus {
+        // 結果をバスに保存する
+        self.x.iter().enumerate().for_each(|(i, elem)| self.state_bus[i].value = *elem);
+
+        &self.state_bus
     }
 
 }
 
 // 伝達関数から状態空間モデルを生成する
-pub fn crate_ssm_from_tf<'a> (num: &'a [f64], den: &'a [f64], solvertype: SolverType) -> anyhow::Result<SpaceStateModel> {
+pub fn crate_ssm_from_tf<'a> (name: &str, num: &'a [f64], den: &'a [f64], solvertype: SolverType) -> anyhow::Result<SpaceStateModel> {
     let sdim = den.len() - 1;
     let idim = 1;
     let odim = 1;
+    let state_def = (0..sdim).map(|x| (format!("s_{}", x), String::from("-"))).collect::<Vec<SigDef>>();
+    let input_def = vec![(String::from("i_1"), String::from("-"))];
+    let output_def = vec![(String::from("o_1"), String::from("-"))];
 
     if sdim < 1 {
         return Err(anyhow!("状態ベクトルの次数が0になりました。"))
@@ -169,7 +191,7 @@ pub fn crate_ssm_from_tf<'a> (num: &'a [f64], den: &'a [f64], solvertype: Solver
         return Err(anyhow!("プロパーな伝達関数ではありません。"))
     }
 
-    let mut model = SpaceStateModel::new(sdim, idim, odim, solvertype)?;
+    let mut model = SpaceStateModel::new(name, state_def, input_def, output_def, solvertype)?;
     let an = den[0];
 
     // A行列の作成
@@ -226,14 +248,22 @@ pub fn crate_ssm_from_tf<'a> (num: &'a [f64], den: &'a [f64], solvertype: Solver
 
 impl Model for SpaceStateModel {
     fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()> {
+        // input_busに設定されている信号名をsignalsから抽出して値をコピーする
+        for elem in self.input_bus.iter_mut() { 
+            let signal = signals.get_by_name(elem.name())?;
+
+            elem.value = signal.value;
+        };
+
         Ok(())
     }
 
     fn interface_out(&mut self) -> &Bus {
-        // 結果をバスに保存する
-        self.x.iter().enumerate().for_each(|(i, elem)| self.sigbus[i].value = *elem);
+        let obs = self.get_observation();
+        
+        self.output_bus.iter_mut().enumerate().for_each(|(i, elem)| elem.value = obs[i]);
 
-        &self.sigbus
+        &self.output_bus
     }
 
     fn nextstate(&mut self, delta_t: f64) {
@@ -305,15 +335,17 @@ impl fmt::Display for SpaceStateModel {
 /// 伝達関数モデル
 #[derive(Debug, Clone)]
 pub struct TransFuncModel {
+    name: String, 
     model: SpaceStateModel, // 内部的には状態空間モデルを持つ
     num: Vec<f64>,          // 分子多項式の係数 2次の例 b2 * s^2 + b1 * s + b0
     den: Vec<f64>,          // 分母多項式の係数 2次の例 a2 * s^2 + a1 * s + a0
 }
 
 impl TransFuncModel {
-    pub fn new(num_coef: &[f64], den_coef: &[f64], solvertype: SolverType) -> anyhow::Result<Self> {
-        let model = crate_ssm_from_tf(&num_coef, &den_coef, solvertype).context("Failed to create Trasfer Function Model")?;
+    pub fn new(name: &str, num_coef: &[f64], den_coef: &[f64], solvertype: SolverType) -> anyhow::Result<Self> {
+        let model = crate_ssm_from_tf(name, &num_coef, &den_coef, solvertype).context("Failed to create Trasfer Function Model")?;
         Ok(Self {
+            name: name.to_string(),
             num : num_coef.to_vec(),
             den : den_coef.to_vec(),  
             model : model,
@@ -356,7 +388,10 @@ mod simmodel_test {
 
     #[test] // StateSpaceModelのセット時のテスト 
     fn ssm_settest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
 
         let mtrx_a = [1.0, 1.0, 1.0, 1.0];
         model.set_mtrx_a(&mtrx_a);
@@ -386,50 +421,78 @@ mod simmodel_test {
     }
 
     #[test]
+    fn ssm_interfacetest() {
+        panic!("SSMのinterfaceのテストから再開すること!");
+        // テスト内容
+        //interface_in, interface_out, get_statebus()
+    }
+
+    #[test]
     #[should_panic]
     fn ssm_set_errtest() {
-        let model = SpaceStateModel::new(0, 0, 0, SolverType::Euler).unwrap();
+        let state_def = vec![];
+        let input_def = vec![];
+        let output_def = vec![];
+        let model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_a_errtest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_a(&[2.0, 1.0]).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_b_errtest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_b(&[2.0, 1.0, 2.0]).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_c_errtest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_c(&[2.0, 1.0, 2.0]).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_d_errtest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_d(&[2.0, 1.0, 2.0]).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn ssm_set_x_errtest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_x(&[2.0, 1.0, 2.0]).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn ssm_initstate_errtest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.init_state(&[2.0, 1.0, 2.0]).unwrap();
     }
 
@@ -437,26 +500,32 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_setu_errtest() {
-        let mut model = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_u(&[2.0, 1.0, 2.0]).unwrap();
     }
 
     #[test]
     #[should_panic]
     fn tf_set_errtest1() {
-        let model = TransFuncModel::new(&[1.0, 0.0, 2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();       
+        let model = TransFuncModel::new("model", &[1.0, 0.0, 2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();       
     }
 
     #[test]
     #[should_panic]
     fn tf_set_errtest2() {
-        let model = TransFuncModel::new(&[1.0], &[2.0], SolverType::Euler).unwrap();       
+        let model = TransFuncModel::new("model", &[1.0], &[2.0], SolverType::Euler).unwrap();       
     }
 
     #[test]
     fn tf_settest() {
-        let tfmodel = TransFuncModel::new(&[2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();
-        let mut ssm = SpaceStateModel::new(2, 1, 1, SolverType::Euler).unwrap();
+        let tfmodel = TransFuncModel::new("model", &[2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();
+        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
+        let input_def = vec![("i1".to_string(), "Nm".to_string())];
+        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let mut ssm = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
 
         ssm.set_mtrx_a(&[0.0, -0.5, 1.0, -0.5]);
         ssm.set_mtrx_b(&[1.0, 1.0]);
