@@ -40,6 +40,8 @@ impl fmt::Display for Signal {
     }
 }
 
+pub type SigDef = (String, String); // (信号名, 単位)
+
 /// Busの定義
 #[derive(Debug, Clone)]
 pub struct Bus {
@@ -77,6 +79,11 @@ impl Bus {
             },
             None => Err(anyhow!("信号が存在しません。"))
         }
+    }
+
+    pub fn get_sigdef(&self) -> Vec<SigDef> {
+        self.signals.iter().map(|sig| (sig.name().to_string(), sig.unit().to_string()))
+                            .collect::<Vec<SigDef>>()
     }
 
     pub fn iter(&self) -> BusIter {

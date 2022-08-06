@@ -43,8 +43,6 @@ pub trait DEModel: Model{
     }
 }
 
-pub type SigDef = (String, String); // (信号名, 単位)
-
 /// 状態空間モデル
 #[derive(Debug, Clone)]
 pub struct SpaceStateModel {
@@ -78,7 +76,7 @@ impl SpaceStateModel {
         let mut input_bus = Bus::new();
         input_def.iter().for_each(|(name, unit)| input_bus.push(Signal::new(0.0, name, unit)));
         let mut output_bus = Bus::new();
-        input_def.iter().for_each(|(name, unit)| output_bus.push(Signal::new(0.0, name, unit)));
+        output_def.iter().for_each(|(name, unit)| output_bus.push(Signal::new(0.0, name, unit)));
 
         Ok(SpaceStateModel {
             name: name.to_string(),
@@ -249,10 +247,12 @@ pub fn crate_ssm_from_tf<'a> (name: &str, num: &'a [f64], den: &'a [f64], solver
 impl Model for SpaceStateModel {
     fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()> {
         // input_busに設定されている信号名をsignalsから抽出して値をコピーする
-        for elem in self.input_bus.iter_mut() { 
-            let signal = signals.get_by_name(elem.name())?;
+        for (i, elem) in self.input_bus.iter_mut().enumerate() { 
+            let signal = signals.get_by_name(elem.name())
+                .with_context(|| format!("信号名:{}が見つかりません。", elem.name()))?;
 
             elem.value = signal.value;
+            self.u[i] = signal.value;
         };
 
         Ok(())
@@ -422,9 +422,43 @@ mod simmodel_test {
 
     #[test]
     fn ssm_interfacetest() {
-        panic!("SSMのinterfaceのテストから再開すること!");
-        // テスト内容
-        //interface_in, interface_out, get_statebus()
+        let state_bus = Bus::from(vec![
+            Signal::new(0.0, "s1", "Nm"),
+            Signal::new(0.0, "s2", "V"),
+        ]);
+
+        let input_bus = Bus::from(vec![
+            Signal::new(1.0, "i1", "Nm"),
+        ]);
+
+        let output_bus = Bus::from(vec![
+            Signal::new(0.0, "o1", "rpm"),
+        ]);
+
+        let mut model = SpaceStateModel::new("model", 
+            state_bus.get_sigdef(), 
+            input_bus.get_sigdef(), 
+            output_bus.get_sigdef(), 
+            SolverType::Euler).unwrap();
+        model.set_mtrx_a(&[1.0, 0.0, 0.0, 1.0]).unwrap();
+        model.set_mtrx_b(&[1.0, 2.0]);
+        model.set_mtrx_c(&[1.0, 0.0]);
+        
+        model.interface_in(&input_bus); // 入力のテスト
+        assert_eq!(model.u[0], 1.0);
+        
+        model.nextstate(1.0);  
+
+        let output = model.interface_out(); // 出力のテスト
+        assert_eq!(output.get_by_name("o1").unwrap().value, 1.0);
+        
+        println!("output => \n{}", output);
+
+        let state = model.get_statebus();
+        assert_eq!(state.get_by_name("s1").unwrap().value, 1.0);
+        assert_eq!(state.get_by_name("s2").unwrap().value, 2.0);
+
+        println!("state => \n{}", state);
     }
 
     #[test]
