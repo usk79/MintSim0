@@ -7,6 +7,8 @@ pub mod signal;
 pub mod simmodel;
 /// シミュレーションを実行するためのシミュレータ管理用トレイト
 pub mod simrunner;
+/// Busに登録されている信号をシミュレーション時間分保存することと、データをプロットする
+pub mod simscope;
 
 /// simtoolsには関係ない関数（デバッグ用）
 fn type_of<T>(_: T) -> String{

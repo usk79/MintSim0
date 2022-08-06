@@ -34,7 +34,7 @@ fn print_typename<T>(_: T) {
 }
 
 fn simrun_test() {
-    let model = TransFuncModel::new("test", &[1.0, 0.0, 2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap_or_else(|e| {
+    let model = TransFuncModel::new("test", &[2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap_or_else(|e| {
         println!("{:?}", e);
         process::exit(1);
     });

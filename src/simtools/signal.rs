@@ -7,6 +7,10 @@ use core::slice::{Iter, IterMut};
 
 use anyhow::{Context};
 
+/** Signal
+シミュレーションで使用する単一の信号表現
+値、信号名、信号の単位のデータを保存する。
+*/
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
     pub value: f64,   // 値　値だけは自由に書き換えられるようにしている
@@ -23,12 +27,12 @@ impl Signal {
         }
     }
     
-    /// nameアクセッサ
+    /// nameへのアクセッサメソッド
     pub fn name<'a>(&'a self) -> &'a str {
         &self.name
     }
 
-    /// unitアクセッサ
+    /// unitへのアクセッサメソッド
     pub fn unit<'a>(&'a self) -> &'a str {
         &self.unit
     }
@@ -40,9 +44,12 @@ impl fmt::Display for Signal {
     }
 }
 
+/// 信号名と単位だけを設定する用のタプル
 pub type SigDef = (String, String); // (信号名, 単位)
 
-/// Busの定義
+/// Signalを複数まとめたものをBusと定義する。
+/// シミュレーションで作るモデル同士のインターフェースとして用いる。
+/// また、Bus内の信号を抽出するメソッドを中心に実装している。
 #[derive(Debug, Clone)]
 pub struct Bus {
     signals: Vec<Signal>,
@@ -57,12 +64,14 @@ impl Bus {
         }
     }
 
+    /// BusにSignalを追加する
     pub fn push(&mut self, signal: Signal) {
         let keyname = signal.name.clone();
         self.keytable.insert(keyname, self.signals.len());
         self.signals.push(signal);
     }
 
+    /// 信号名から信号を抽出する
     pub fn get_by_name(&self, signame: impl Into<String>) -> anyhow::Result<&Signal> {
         match self.keytable.get(&signame.into()) {
             Some(index) => {
@@ -72,6 +81,7 @@ impl Bus {
         }
     }
 
+    /// get_by_nameのmutable版
     pub fn get_by_name_mut(&mut self, signame: impl Into<String>) -> anyhow::Result<&mut Signal> {
         match self.keytable.get(&signame.into()) {
             Some(index) => {
@@ -81,6 +91,7 @@ impl Bus {
         }
     }
 
+    /// Vec<SigDef>を返す。モデルの作成時に使用する。
     pub fn get_sigdef(&self) -> Vec<SigDef> {
         self.signals.iter().map(|sig| (sig.name().to_string(), sig.unit().to_string()))
                             .collect::<Vec<SigDef>>()
