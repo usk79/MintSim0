@@ -7,6 +7,10 @@ use core::slice::{Iter, IterMut};
 
 use anyhow::{Context};
 
+// 今後の実装メモ
+// Busについて、複数のバスから必要な信号を抽出して一つのバスを作るメソッドが必要
+// Singalについて timeという名前は使用禁止にする処理を追加のこと
+
 /** Signal
 シミュレーションで使用する単一の信号表現
 値、信号名、信号の単位のデータを保存する。
@@ -14,38 +18,56 @@ use anyhow::{Context};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signal {
     pub value: f64,   // 値　値だけは自由に書き換えられるようにしている
-    name: String,     // 信号名
-    unit: String,     // 単位
+    sigdef: SigDef,
 }
 
 impl Signal {
-    pub fn new(initvalue: f64, signame: impl Into<String>, sigunit: impl Into<String>) -> Self {
+    pub fn new(initvalue: f64, name: impl Into<String>, unit: impl Into<String>) -> Self {
         Self {
             value: initvalue,
-            name: signame.into(),
-            unit: sigunit.into(),
+            sigdef: SigDef::new(name.into(), unit.into()),
         }
     }
     
     /// nameへのアクセッサメソッド
     pub fn name<'a>(&'a self) -> &'a str {
-        &self.name
+        &self.sigdef.name()
     }
 
     /// unitへのアクセッサメソッド
     pub fn unit<'a>(&'a self) -> &'a str {
-        &self.unit
+        &self.sigdef.unit()
     }
 }
 
 impl fmt::Display for Signal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}: {} [{}]\n", self.name, self.value, self.unit)
+        write!(f, "{}: {} [{}]\n", self.sigdef.name(), self.value, self.sigdef.unit())
     }
 }
 
 /// 信号名と単位だけを設定する用のタプル
-pub type SigDef = (String, String); // (信号名, 単位)
+#[derive(Debug, Clone, PartialEq)]
+pub struct SigDef(String, String); // (信号名, 単位)
+
+impl SigDef {
+    pub fn new(name: impl Into<String>, unit: impl Into<String>) -> Self {
+        Self(name.into(), unit.into())
+    }
+    pub fn name(&self) -> &str {
+        &self.0
+    }
+
+    pub fn unit(&self) -> &str {
+        &self.1
+    }
+}
+
+impl fmt::Display for SigDef {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}[{}]\n", self.0, self.1)
+    }
+}
 
 /// Signalを複数まとめたものをBusと定義する。
 /// シミュレーションで作るモデル同士のインターフェースとして用いる。
@@ -66,7 +88,7 @@ impl Bus {
 
     /// BusにSignalを追加する
     pub fn push(&mut self, signal: Signal) {
-        let keyname = signal.name.clone();
+        let keyname = signal.name().to_string();
         self.keytable.insert(keyname, self.signals.len());
         self.signals.push(signal);
     }
@@ -93,7 +115,7 @@ impl Bus {
 
     /// Vec<SigDef>を返す。モデルの作成時に使用する。
     pub fn get_sigdef(&self) -> Vec<SigDef> {
-        self.signals.iter().map(|sig| (sig.name().to_string(), sig.unit().to_string()))
+        self.signals.iter().map(|sig| SigDef(sig.name().to_string(), sig.unit().to_string()))
                             .collect::<Vec<SigDef>>()
     }
 
@@ -126,7 +148,7 @@ impl fmt::Display for Bus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut liststr = String::new();
         for item in self.signals.iter() {
-            let s = format!("{}: {} [{}]\n", item.name, item.value, item.unit);
+            let s = format!("{}\n", item);
             liststr.push_str(&s);
         }
 
@@ -141,7 +163,7 @@ impl From<Vec<Signal>> for Bus {
         let mut keytable = HashMap::<String, usize>::new();
 
         for (idx, sig) in signals.iter().enumerate() {
-            keytable.insert(sig.name.clone(), idx);
+            keytable.insert(sig.name().to_string(), idx);
         }
 
         Self {

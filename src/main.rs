@@ -7,8 +7,6 @@ use simmodel::{*};
 use signal::{*};
 
 fn main() {
-
-    simrun_test();
     
     println!("{}\n", simconsts::G);
 
@@ -33,17 +31,3 @@ fn print_typename<T>(_: T) {
     println!("{}", std::any::type_name::<T>());
 }
 
-fn simrun_test() {
-    let model = TransFuncModel::new("test", &[2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap_or_else(|e| {
-        println!("{:?}", e);
-        process::exit(1);
-    });
-    let mut sim = SimRunner::new(10.0, 0.001, model);
-
-    sim.run_sim().unwrap_or_else(|e| {
-        println!("{:?}", e);
-        process::exit(1);
-    });
-    
-
-}

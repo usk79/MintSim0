@@ -12,7 +12,9 @@ use anyhow::{Context};
 pub trait Model {
     /// シミュレーション時間を1ステップ進める
     fn nextstate(&mut self, delta_t: f64);
+    /// モデルへのステップごとの入力
     fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()>;
+    /// モデルからのステップごとの出力
     fn interface_out(&mut self) -> &Bus;
 }
 
@@ -72,11 +74,11 @@ impl SpaceStateModel {
         }
 
         let mut state_bus = Bus::new();
-        state_def.iter().for_each(|(name, unit)| state_bus.push(Signal::new(0.0, name, unit)));
+        state_def.iter().for_each(|sig| state_bus.push(Signal::new(0.0, sig.name(), sig.unit())));
         let mut input_bus = Bus::new();
-        input_def.iter().for_each(|(name, unit)| input_bus.push(Signal::new(0.0, name, unit)));
+        input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())));
         let mut output_bus = Bus::new();
-        output_def.iter().for_each(|(name, unit)| output_bus.push(Signal::new(0.0, name, unit)));
+        output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())));
 
         Ok(SpaceStateModel {
             name: name.to_string(),
@@ -178,9 +180,9 @@ pub fn crate_ssm_from_tf<'a> (name: &str, num: &'a [f64], den: &'a [f64], solver
     let sdim = den.len() - 1;
     let idim = 1;
     let odim = 1;
-    let state_def = (0..sdim).map(|x| (format!("s_{}", x), String::from("-"))).collect::<Vec<SigDef>>();
-    let input_def = vec![(String::from("i_1"), String::from("-"))];
-    let output_def = vec![(String::from("o_1"), String::from("-"))];
+    let state_def = (0..sdim).map(|x| SigDef::new(format!("s_{}", x), "-")).collect::<Vec<SigDef>>();
+    let input_def = vec![SigDef::new("i_1", "-")];
+    let output_def = vec![SigDef::new("o_1", "-")];
 
     if sdim < 1 {
         return Err(anyhow!("状態ベクトルの次数が0になりました。"))
@@ -388,9 +390,9 @@ mod simmodel_test {
 
     #[test] // StateSpaceModelのセット時のテスト 
     fn ssm_settest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
 
         let mtrx_a = [1.0, 1.0, 1.0, 1.0];
@@ -473,9 +475,9 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_a_errtest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_a(&[2.0, 1.0]).unwrap();
     }
@@ -483,9 +485,9 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_b_errtest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_b(&[2.0, 1.0, 2.0]).unwrap();
     }
@@ -493,9 +495,9 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_c_errtest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_c(&[2.0, 1.0, 2.0]).unwrap();
     }
@@ -503,9 +505,9 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_set_mtrx_d_errtest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_mtrx_d(&[2.0, 1.0, 2.0]).unwrap();
     }
@@ -513,9 +515,9 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_set_x_errtest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_x(&[2.0, 1.0, 2.0]).unwrap();
     }
@@ -523,9 +525,9 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_initstate_errtest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.init_state(&[2.0, 1.0, 2.0]).unwrap();
     }
@@ -534,9 +536,9 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn ssm_setu_errtest() {
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
         model.set_u(&[2.0, 1.0, 2.0]).unwrap();
     }
@@ -556,9 +558,9 @@ mod simmodel_test {
     #[test]
     fn tf_settest() {
         let tfmodel = TransFuncModel::new("model", &[2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();
-        let state_def = vec![("s1".to_string(), "Nm".to_string()), ("s2".to_string(), "rpm".to_string())];
-        let input_def = vec![("i1".to_string(), "Nm".to_string())];
-        let output_def = vec![("o1".to_string(), "rpm".to_string())];
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let input_def = vec![SigDef::new("i1", "Nm")];
+        let output_def = vec![SigDef::new("o1", "rpm")];
         let mut ssm = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
 
         ssm.set_mtrx_a(&[0.0, -0.5, 1.0, -0.5]);
