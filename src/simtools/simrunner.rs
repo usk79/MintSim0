@@ -172,7 +172,7 @@ mod simrun_test {
     
         fn step_sim(&mut self, time: f64) {
             let mut input_bus = Bus::new();
-            let input_sig = Signal::new(0.0, "v", "V");
+            let input_sig = Signal::new(0.10, "v", "V");
             input_bus.push(input_sig);
 
             self.model.interface_in(&input_bus);
@@ -190,7 +190,7 @@ mod simrun_test {
 
     #[test]
     fn rlc_test() {
-        let target = RLCCircuit::new(10.0, 0.3e-3, 0.1e-6, 1.0, 0.0);
+        let target = RLCCircuit::new(10.0, 0.3e-3, 0.1e-6, 0.0, 0.0);
         let mut sim = SimRunner::new(target);
     
         sim.run_sim().unwrap();
