@@ -330,7 +330,7 @@ impl fmt::Display for SpaceStateModel {
         }
 
         
-        write!(f, "{}\n{}\n{}\n{}\n", str_a, str_b, str_c, str_d)
+        write!(f, "name: {}\n{}\n{}\n{}\n{}\n", self.name, str_a, str_b, str_c, str_d)
     }
 }
 
@@ -375,7 +375,7 @@ impl Model for TransFuncModel {
 
 impl fmt::Display for TransFuncModel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Transfer Function Model -- >> \n\tnum: {:?}\n\tden: {:?}\n", self.num, self.den)
+        write!(f, "Transfer Function Model -- >> \n\tname: {}\n\tnum: {:?}\n\tden: {:?}\n", self.name, self.num, self.den)
     }
 }
 

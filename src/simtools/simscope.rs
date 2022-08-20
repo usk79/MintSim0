@@ -1,12 +1,9 @@
-use std::fmt;
 
-use std::fs;
 use std::fs::File;
-use std::io::{self, Write, BufWriter};
+use std::io::{Write, BufWriter};
 
 use crate::simtools::signal::{*};
-use std::collections::HashMap;
-use anyhow::{Context};
+use anyhow::{*};
 
 use plotters::prelude::*;
 use plotters::coord::Shift;
@@ -45,14 +42,14 @@ impl SimScope {
         Ok(())
     }
 
-    pub fn export(&self, filepath: &str) {
+    pub fn export(&self, filepath: &str) -> anyhow::Result<()> {
         let mut file = BufWriter::new(File::create(filepath).unwrap());
         
         // 一行目の信号名の部分を作成
         let mut seriesname = vec!["time[s]".to_string()];
         self.sigdef.iter().for_each(|sig| seriesname.push( sig.to_string() ) );
         
-        writeln!(file, "{}", seriesname.join(","));
+        writeln!(file, "{}", seriesname.join(","))?;
 
         // データを1行ずつ出力
         let siglen = self.timedata.len();
@@ -64,8 +61,10 @@ impl SimScope {
                 line.push(self.storage[sigidx][idx].to_string());
             }
 
-            writeln!(file, "{}", line.join(","));
+            writeln!(file, "{}", line.join(","))?;
         }
+
+        Ok(())
     }
 
     pub fn timeplot_all(&self, filename: &str, pltsize: (u32, u32), pltdivide: (usize, usize)) -> anyhow::Result<()>{

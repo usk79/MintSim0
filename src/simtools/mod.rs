@@ -11,7 +11,8 @@ pub mod simrunner;
 pub mod simscope;
 
 /// simtoolsには関係ない関数（デバッグ用）
+#[allow(dead_code)]
 fn type_of<T>(_: T) -> String{
     let a = std::any::type_name::<T>();
     return a.to_string();
-  }
+}
