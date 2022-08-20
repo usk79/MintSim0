@@ -135,6 +135,7 @@ mod simrun_test {
     struct RLCCircuit {
         simset: SimSet,
         model: SpaceStateModel,
+        bus: Bus,
         scope_out: SimScope,
     }
     
@@ -144,19 +145,26 @@ mod simrun_test {
             let state_def = vec![SigDef::new("i", "A"), SigDef::new("q", "C")];
             let output_def = vec![SigDef::new("Vr", "V"), SigDef::new("Vc", "V")];
 
-            let mut model = SpaceStateModel::new("RLC", state_def, input_def, output_def, SolverType::RungeKutta).unwrap();
+            let mut model = SpaceStateModel::new("RLC", &state_def, &input_def, &output_def, SolverType::RungeKutta).unwrap();
             model.set_mtrx_a(&[-r / l, -1.0 / (l * c), 1.0, 0.0]).unwrap();
             model.set_mtrx_b(&[1.0 / l, 0.0]).unwrap();
             model.set_mtrx_c(&[r, 0.0, 0.0, 1.0 / c]).unwrap();
             model.init_state(&[init_i, init_q]).unwrap();
 
-            let simset = SimSet::new(10.0, 0.001);
-            let scope = SimScope::new(vec![SigDef::new("Vr", "V"), SigDef::new("Vc", "V")], simset.get_stepnum());
+            let simset = SimSet::new(0.001, 0.0000001);
+
+            let mut bus = Bus::new();
+            bus.set_sigdef(&input_def);
+            bus.set_sigdef(&output_def);
+            bus.set_sigdef(&state_def);
+
+            let scope = SimScope::new(&bus.get_sigdef(), simset.get_stepnum());
     
             Self {
                 simset: simset,
                 model : model,
                 scope_out: scope,
+                bus: bus,
             }
         }
     }
@@ -167,7 +175,7 @@ mod simrun_test {
         }
     
         fn init_sim(&mut self) {
-            
+            self.model.init_state(&[0.0, 0.0001]);
         }
     
         fn step_sim(&mut self, time: f64) {
@@ -179,12 +187,20 @@ mod simrun_test {
 
             self.model.nextstate(self.simset.get_deltat());
 
-            self.scope_out.push(time, self.model.interface_out());
+            self.bus.update_from_bus(&input_bus);
+
+            let output_bus = self.model.interface_out();
+            self.bus.update_from_bus(&output_bus);
+
+            let state_bus = self.model.get_statebus();
+            self.bus.update_from_bus(&state_bus);
+
+            self.scope_out.push(time, &self.bus);
         }
     
         fn after_sim(&mut self) {
             self.scope_out.export("test_output\\rlc.csv");
-            self.scope_out.timeplot_all("test_output\\rlc.png", (500, 500), (2, 1));
+            self.scope_out.timeplot_all("test_output\\rlc.png", (500, 500), (3, 2));
         }
     }
 

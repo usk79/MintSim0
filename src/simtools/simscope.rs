@@ -25,13 +25,13 @@ pub struct SimScope {
 } 
 
 impl SimScope {
-    pub fn new(sigdef: Vec<SigDef>, stepnum: usize) -> Self {
+    pub fn new(sigdef: &Vec<SigDef>, stepnum: usize) -> Self {
         let signal_num = sigdef.len();
 
         Self {
             timedata: Vec::with_capacity(stepnum),
             storage: (0..signal_num).map(|_| Vec::with_capacity(stepnum) ).collect::<Vec<Vec<f64>>>(),
-            sigdef: sigdef,
+            sigdef: sigdef.clone(),
             signum: signal_num,
         }
     }
@@ -137,7 +137,7 @@ mod scope_test {
             Signal::new(0.0, "motor_current", "A"),
         ]);
 
-        let mut scope = SimScope::new(bus.get_sigdef(), 10);
+        let mut scope = SimScope::new(&bus.get_sigdef(), 10);
 
         for i in 0..10 {
             bus[0].value = i as f64;

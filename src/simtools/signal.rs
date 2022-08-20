@@ -87,10 +87,29 @@ impl Bus {
     }
 
     /// BusにSignalを追加する
-    pub fn push(&mut self, signal: Signal) {
+    pub fn push(&mut self, signal: Signal) -> anyhow::Result<()> {
         let keyname = signal.name().to_string();
-        self.keytable.insert(keyname, self.signals.len());
-        self.signals.push(signal);
+        match self.keytable.contains_key(&keyname) {
+            true => {
+                return Err(anyhow!(format!("信号名が重複しています。: 信号名{}", keyname)));
+            },
+            false => {
+                self.keytable.insert(keyname, self.signals.len());
+                self.signals.push(signal);
+            }
+        } 
+        
+        Ok(())
+    }
+
+    pub fn update(&mut self, signal: &Signal) {
+        if let Some(idx) = self.keytable.get(signal.name()) {
+            self.signals[*idx].value = signal.value;
+        } // 登録されていない信号に対しては何もしない
+    }
+
+    pub fn update_from_bus(&mut self, bus: &Bus) {
+        bus.iter().for_each(|sig| self.update(sig));
     }
 
     /// 信号名から信号を抽出する
@@ -111,6 +130,25 @@ impl Bus {
             },
             None => Err(anyhow!("信号が存在しません。"))
         }
+    }
+
+    /// Vec<SigDef>の情報を取り込んでバスを作成する
+    pub fn set_sigdef(&mut self, sigs: &Vec<SigDef>) -> anyhow::Result<()> {
+
+        for sig in sigs.iter() {
+            let keyname = sig.name().to_string();
+            match self.keytable.contains_key(&keyname) {
+                true => {
+                    return Err(anyhow!(format!("信号名が重複しています。: 信号名{}", keyname)));
+                },
+                false => {
+                    self.keytable.insert(keyname, self.signals.len());
+                    self.signals.push(Signal::new(0.0, sig.name(), sig.unit()));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Vec<SigDef>を返す。モデルの作成時に使用する。
@@ -180,6 +218,7 @@ type BusIterMut<'a> = IterMut<'a, Signal>;
 #[cfg(test)]
 mod signal_test {
     use super::Signal;
+    use super::SigDef;
     use super::Bus;
 
     #[test]
@@ -272,5 +311,21 @@ mod signal_test {
         assert_eq!(busiter_mut.next(), Some(&mut Signal::new(1.0, "motor_volt", "V")));
         assert_eq!(busiter_mut.next(), Some(&mut Signal::new(2.0, "motor_current", "A")));
         assert_eq!(busiter_mut.next(), None);
+    }
+
+    #[test]
+    fn setsig_test() {
+        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
+        let mut bus = Bus::new();
+        let testvec = vec![Signal::new(0.0, "s1", "Nm"), Signal::new(0.0, "s2", "rpm")];
+
+        bus.set_sigdef(&state_def);
+
+        assert_eq!(bus.signals, testvec);
+
+        bus.set_sigdef(&state_def);
+
+        assert_eq!(bus.signals, testvec);
+
     }
 }

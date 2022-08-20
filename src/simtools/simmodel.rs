@@ -65,7 +65,7 @@ pub struct SpaceStateModel {
 }
 
 impl SpaceStateModel {
-    pub fn new(name: &str, state_def: Vec<SigDef>, input_def: Vec<SigDef>, output_def: Vec<SigDef>, solvertype: SolverType) -> anyhow::Result<Self> {
+    pub fn new(name: &str, state_def: &Vec<SigDef>, input_def: &Vec<SigDef>, output_def: &Vec<SigDef>, solvertype: SolverType) -> anyhow::Result<Self> {
         let sdim = state_def.len();
         let idim = input_def.len();
         let odim = output_def.len();
@@ -74,11 +74,11 @@ impl SpaceStateModel {
         }
 
         let mut state_bus = Bus::new();
-        state_def.iter().for_each(|sig| state_bus.push(Signal::new(0.0, sig.name(), sig.unit())));
+        state_def.iter().for_each(|sig| state_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
         let mut input_bus = Bus::new();
-        input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())));
+        input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
         let mut output_bus = Bus::new();
-        output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())));
+        output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
 
         Ok(SpaceStateModel {
             name: name.to_string(),
@@ -166,7 +166,7 @@ impl SpaceStateModel {
         &self.mtrx_c * &self.x + &self.mtrx_d * &self.u
     }
 
-    fn get_statebus(&mut self) -> &Bus {
+    pub fn get_statebus(&mut self) -> &Bus {
         // 結果をバスに保存する
         self.x.iter().enumerate().for_each(|(i, elem)| self.state_bus[i].value = *elem);
 
@@ -191,7 +191,7 @@ pub fn crate_ssm_from_tf<'a> (name: &str, num: &'a [f64], den: &'a [f64], solver
         return Err(anyhow!("プロパーな伝達関数ではありません。"))
     }
 
-    let mut model = SpaceStateModel::new(name, state_def, input_def, output_def, solvertype)?;
+    let mut model = SpaceStateModel::new(name, &state_def, &input_def, &output_def, solvertype)?;
     let an = den[0];
 
     // A行列の作成
@@ -393,7 +393,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
 
         let mtrx_a = [1.0, 1.0, 1.0, 1.0];
         model.set_mtrx_a(&mtrx_a);
@@ -438,9 +438,9 @@ mod simmodel_test {
         ]);
 
         let mut model = SpaceStateModel::new("model", 
-            state_bus.get_sigdef(), 
-            input_bus.get_sigdef(), 
-            output_bus.get_sigdef(), 
+            &state_bus.get_sigdef(), 
+            &input_bus.get_sigdef(), 
+            &output_bus.get_sigdef(), 
             SolverType::Euler).unwrap();
         model.set_mtrx_a(&[1.0, 0.0, 0.0, 1.0]).unwrap();
         model.set_mtrx_b(&[1.0, 2.0]);
@@ -469,7 +469,7 @@ mod simmodel_test {
         let state_def = vec![];
         let input_def = vec![];
         let output_def = vec![];
-        let model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
     }
 
     #[test]
@@ -478,7 +478,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
         model.set_mtrx_a(&[2.0, 1.0]).unwrap();
     }
 
@@ -488,7 +488,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
         model.set_mtrx_b(&[2.0, 1.0, 2.0]).unwrap();
     }
 
@@ -498,7 +498,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
         model.set_mtrx_c(&[2.0, 1.0, 2.0]).unwrap();
     }
 
@@ -508,7 +508,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
         model.set_mtrx_d(&[2.0, 1.0, 2.0]).unwrap();
     }
 
@@ -518,7 +518,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
         model.set_x(&[2.0, 1.0, 2.0]).unwrap();
     }
 
@@ -528,7 +528,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
         model.init_state(&[2.0, 1.0, 2.0]).unwrap();
     }
 
@@ -539,7 +539,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut model = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
         model.set_u(&[2.0, 1.0, 2.0]).unwrap();
     }
 
@@ -561,7 +561,7 @@ mod simmodel_test {
         let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
         let input_def = vec![SigDef::new("i1", "Nm")];
         let output_def = vec![SigDef::new("o1", "rpm")];
-        let mut ssm = SpaceStateModel::new("model", state_def, input_def, output_def, SolverType::Euler).unwrap();
+        let mut ssm = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
 
         ssm.set_mtrx_a(&[0.0, -0.5, 1.0, -0.5]);
         ssm.set_mtrx_b(&[1.0, 1.0]);
