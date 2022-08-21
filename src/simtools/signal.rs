@@ -5,6 +5,9 @@ use std::ops::IndexMut;
 use std::convert::From;
 use core::slice::{Iter, IterMut};
 
+extern crate nalgebra as na;
+use na::{DMatrix};
+
 use anyhow::{*};
 
 // 今後の実装メモ
@@ -202,6 +205,31 @@ impl From<Vec<Signal>> for Bus {
 
         for (idx, sig) in signals.iter().enumerate() {
             keytable.insert(sig.name().to_string(), idx);
+        }
+
+        Self {
+            signals: signals,
+            keytable: keytable,
+        }
+    }
+}
+
+impl From<Vec<SigDef>> for Bus {
+    fn from(sigdef: Vec<SigDef>) -> Self {
+        let mut keytable = HashMap::<String, usize>::new();
+        let mut signals = Vec::new();
+
+        for sig in sigdef.iter() {
+            let keyname = sig.name().to_string();
+            match keytable.contains_key(&keyname) {
+                true => {
+                    panic!("信号名が重複しています。: 信号名{}", keyname);
+                },
+                false => {
+                    keytable.insert(keyname, signals.len());
+                    signals.push(Signal::new(0.0, sig.name(), sig.unit()));
+                }
+            }
         }
 
         Self {

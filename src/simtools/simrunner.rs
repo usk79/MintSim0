@@ -250,22 +250,15 @@ mod simrun_test {
             state[2] = init_theta;
             state[3] = init_omega;
 
-            let input_def = vec![SigDef::new("trq", "Nm")];
-            let mut input_bus = Bus::new();
-            input_bus.set_sigdef(&input_def);
+            let input_bus = Bus::from(vec![SigDef::new("trq", "Nm")]);
+            let output_bus = Bus::from(vec![SigDef::new("ball_pos", "m")]);
 
-            let output_def = vec![SigDef::new("ball_pos", "m")];
-            let mut output_bus = Bus::new();
-            output_bus.set_sigdef(&output_def);
-
-            let state_def = vec![
+            let state_bus = Bus::from(vec![
                 SigDef::new("ball_r", "m"),
                 SigDef::new("ball_v", "m/s"),
                 SigDef::new("beam_angle", "deg"),
                 SigDef::new("beam_rot", "deg/s"),
-            ];
-            let mut state_bus = Bus::new();
-            state_bus.set_sigdef(&state_def);
+            ]);
 
             Self {
                 x: state,
