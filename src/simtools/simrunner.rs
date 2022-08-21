@@ -86,6 +86,10 @@ mod simrun_test {
     use super::*;
     use crate::simtools::signal::{*};
     use crate::simtools::simscope::{*};
+    use crate::simtools::simmodel::{*};
+
+    use crate::simtools::simconsts::G;
+    use nalgebra::DMatrix;
 
     struct SampleTarget {
         simset: SimSet,
@@ -128,8 +132,6 @@ mod simrun_test {
         let mut sim = SimRunner::new(target);
     
         sim.run_sim().unwrap();
-        
-    
     }
 
     struct RLCCircuit {
@@ -211,5 +213,124 @@ mod simrun_test {
     
         sim.run_sim().unwrap();
     }
+
+    struct BallAndBeam {
+        x: DMatrix<f64>, // 状態ベクトル
+        u: f64, // 入力トルク [Nm]
+        rball: f64, // ボールの半径[m]
+        mball: f64, // ボール重量[kg]
+        jball: f64, // ボールの慣性モーメント[kg・m^2]
+        jbeam: f64, // ビームの慣性モーメント[kg・,^2]
+        mu: f64, // ボールの転がり抵抗係数[-]
+        k: f64, // 空気抵抗係数[N/(m/s)^2]
+        m0: f64, // 途中計算
+        m1: f64, // 途中計算
+        input_bus: Bus, // 入力バス
+        output_bus: Bus, // 出力バス
+        state_bus: Bus, // 状態バス
+    }
+
+    impl BallAndBeam {
+        pub fn new(init_r: f64, init_v: f64, init_theta: f64, init_omega: f64) -> Self {
+            let mut state = DMatrix::from_element(4, 1, 0.0);
+            let rball = 0.2; // 20[cm]
+            let mball = 0.1; // 100[g]
+            let jball = 2.0 / 5.0 * mball * rball * rball; // 2/5mr^2
+            let mbeam = 1.0; // 1[kg]
+            let lbeam = 1.0; // 1[m] ビームの長さ
+            let wbeam = 0.05; // 5[cm]　ビームの幅
+            let mu = 0.3; // 転がり抵抗係数
+            let k = 50.50; // 空気抵抗係数
+            let jbeam = mbeam * (lbeam * lbeam + wbeam * wbeam) / 12.0; 
+            let m0 = jball / (rball * rball) + mball; // 途中計算用変数
+            let m1 = mball / m0;
+
+            state[0] = init_r;
+            state[1] = init_v;
+            state[2] = init_theta;
+            state[3] = init_omega;
+
+            let input_def = vec![SigDef::new("trq", "Nm")];
+            let mut input_bus = Bus::new();
+            input_bus.set_sigdef(&input_def);
+
+            let output_def = vec![SigDef::new("ball_pos", "m")];
+            let mut output_bus = Bus::new();
+            output_bus.set_sigdef(&output_def);
+
+            let state_def = vec![
+                SigDef::new("ball_r", "m"),
+                SigDef::new("ball_v", "m/s"),
+                SigDef::new("beam_angle", "deg"),
+                SigDef::new("beam_rot", "deg/s"),
+            ];
+            let mut state_bus = Bus::new();
+            state_bus.set_sigdef(&state_def);
+
+            Self {
+                x: state,
+                u: 0.0,
+                rball: rball, 
+                mball: mball,
+                jball: jball,
+                jbeam: jbeam,
+                k: k,
+                mu: mu,
+                m0: m0,
+                m1: m1,
+                input_bus: input_bus,
+                output_bus: output_bus,
+                state_bus: state_bus,
+            }
+        }
+
+        pub fn get_state(&self) -> &Bus {
+            &self.state_bus
+        }
+    }
+
+    impl Model for BallAndBeam {
+        fn input_bus(&mut self) -> &mut Bus {
+            &mut self.input_bus
+        }
+
+        fn output_bus(&self) -> &Bus {
+            &self.output_bus
+        }
+
+        fn nextstate(&mut self, delta_t: f64) {
+            self.u = self.input_bus[0].value;
+            self.rungekutta_method(delta_t);
+
+            self.output_bus[0].value = self.x[0];
+        }
+    }
+
+    impl DEModel for BallAndBeam {
+        fn derivative_func(&self, x: &DMatrix<f64>) -> DMatrix<f64> {
+            let mut slope = DMatrix::from_element(4, 1, 0.0);
+            
+            // r
+            slope[0] = x[1];
+            // v                                                                 // 抵抗力の項　符号あってる？
+            slope[1] = self.m1 * G * x[2].sin() + self.m1 * x[0] * x[3] * x[3] - self.mu * G * self.m1 * x[2].cos() - self.k * x[1] / self.m0; 
+            // theta
+            slope[2] = x[3];
+            // omega
+            let j0 = self.mball * x[0] * x[0] + self.jbeam + self.jball;
+            slope[3] = (self.u - 2.0 * self.mball * x[0] * x[1] * x[3] + self.mball * G * x[0] * x[2].cos()) / j0;
+
+            slope
+        }
+    
+        fn set_state(&mut self, newstate: DMatrix<f64>) {
+            self.x = newstate; 
+        }
+    
+        fn get_state(&self) -> &DMatrix<f64> {
+            &self.x
+        }
+    }
+
 
 }

@@ -12,10 +12,28 @@ use anyhow::{Context};
 pub trait Model {
     /// シミュレーション時間を1ステップ進める
     fn nextstate(&mut self, delta_t: f64);
-    /// モデルへのステップごとの入力
-    fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()>;
+    /// input_busの取得
+    fn input_bus(&mut self) -> &mut Bus;
+    /// output_busの取得
+    fn output_bus(&self) -> &Bus;
+
+    /// モデルへのステップごとの入力 (デフォルト実装あり)
+    fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()> {
+        // input_busに設定されている信号名をsignalsから抽出して値をコピーする
+        for elem in self.input_bus().iter_mut() { 
+            let signal = signals.get_by_name(elem.name())
+                .with_context(|| format!("信号名:{}が見つかりません。", elem.name()))?;
+
+            elem.value = signal.value;
+        };
+
+        Ok(())
+    }
+
     /// モデルからのステップごとの出力
-    fn interface_out(&mut self) -> &Bus;
+    fn interface_out(&self) -> &Bus {
+        &self.output_bus()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -247,32 +265,27 @@ pub fn crate_ssm_from_tf<'a> (name: &str, num: &'a [f64], den: &'a [f64], solver
 
 
 impl Model for SpaceStateModel {
-    fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()> {
-        // input_busに設定されている信号名をsignalsから抽出して値をコピーする
-        for (i, elem) in self.input_bus.iter_mut().enumerate() { 
-            let signal = signals.get_by_name(elem.name())
-                .with_context(|| format!("信号名:{}が見つかりません。", elem.name()))?;
-
-            elem.value = signal.value;
-            self.u[i] = signal.value;
-        };
-
-        Ok(())
+    fn input_bus(&mut self) -> &mut Bus {
+        &mut self.input_bus
     }
 
-    fn interface_out(&mut self) -> &Bus {
-        let obs = self.get_observation();
-        
-        self.output_bus.iter_mut().enumerate().for_each(|(i, elem)| elem.value = obs[i]);
-
+    fn output_bus(&self) -> &Bus {
         &self.output_bus
     }
 
     fn nextstate(&mut self, delta_t: f64) {
+        self.input_bus.iter().enumerate().for_each(|(idx, sig)| {
+            self.u[idx] = sig.value;
+        });
+
         match self.solver { 
             SolverType::Euler => self.euler_method(delta_t),
             SolverType::RungeKutta => self.rungekutta_method(delta_t),
         }
+
+        let obs = self.get_observation();
+        
+        self.output_bus.iter_mut().enumerate().for_each(|(i, elem)| elem.value = obs[i]);
     }
 }
 
@@ -360,12 +373,12 @@ impl TransFuncModel {
 }
 
 impl Model for TransFuncModel {
-    fn interface_in(&mut self, signals: &Bus) -> anyhow::Result<()> {
-        Ok(self.model.interface_in(signals)?)
+    fn input_bus(&mut self) -> &mut Bus {
+        self.model.input_bus()
     }
 
-    fn interface_out(&mut self) -> &Bus {
-        self.model.interface_out()
+    fn output_bus(&self) -> &Bus {
+        self.model.output_bus()
     }
 
     fn nextstate(&mut self, delta_t: f64) {
@@ -447,7 +460,6 @@ mod simmodel_test {
         model.set_mtrx_c(&[1.0, 0.0]);
         
         model.interface_in(&input_bus); // 入力のテスト
-        assert_eq!(model.u[0], 1.0);
         
         model.nextstate(1.0);  
 
