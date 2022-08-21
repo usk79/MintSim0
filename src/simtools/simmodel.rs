@@ -274,9 +274,7 @@ impl Model for SpaceStateModel {
     }
 
     fn nextstate(&mut self, delta_t: f64) {
-        self.input_bus.iter().enumerate().for_each(|(idx, sig)| {
-            self.u[idx] = sig.value;
-        });
+        self.set_u(&self.input_bus.to_vec_f64()).unwrap();
 
         match self.solver { 
             SolverType::Euler => self.euler_method(delta_t),
@@ -409,27 +407,27 @@ mod simmodel_test {
         let mut model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
 
         let mtrx_a = [1.0, 1.0, 1.0, 1.0];
-        model.set_mtrx_a(&mtrx_a);
+        model.set_mtrx_a(&mtrx_a).unwrap();
         assert_eq!(model.mtrx_a, DMatrix::from_row_slice(2, 2, &mtrx_a));
 
         let mtrx_b = [1.0, 1.0];
-        model.set_mtrx_b(&mtrx_b);
+        model.set_mtrx_b(&mtrx_b).unwrap();
         assert_eq!(model.mtrx_b, DMatrix::from_row_slice(2, 1, &mtrx_b));
 
         let mtrx_c = [1.0, 1.0];
-        model.set_mtrx_c(&mtrx_c);
+        model.set_mtrx_c(&mtrx_c).unwrap();
         assert_eq!(model.mtrx_c, DMatrix::from_row_slice(1, 2, &mtrx_c));
 
         let init_state = [1.0, 2.0];
-        model.init_state(&init_state);
+        model.init_state(&init_state).unwrap();
         assert_eq!(model.x, DMatrix::from_row_slice(2, 1, &init_state));
 
         let x = [1.0, 2.0];
-        model.set_x(&x);
+        model.set_x(&x).unwrap();
         assert_eq!(model.x, DMatrix::from_row_slice(2, 1, &init_state));
 
         let mtrx_d = [1.0];
-        model.set_mtrx_d(&mtrx_d);
+        model.set_mtrx_d(&mtrx_d).unwrap();
         assert_eq!(model.mtrx_d, DMatrix::from_row_slice(1, 1, &mtrx_d));
 
         println!("model : {}\n", model);
@@ -437,18 +435,18 @@ mod simmodel_test {
 
     #[test]
     fn ssm_interfacetest() {
-        let state_bus = Bus::from(vec![
+        let state_bus = Bus::try_from(vec![
             Signal::new(0.0, "s1", "Nm"),
             Signal::new(0.0, "s2", "V"),
-        ]);
+        ]).unwrap();
 
-        let input_bus = Bus::from(vec![
+        let input_bus = Bus::try_from(vec![
             Signal::new(1.0, "i1", "Nm"),
-        ]);
+        ]).unwrap();
 
-        let output_bus = Bus::from(vec![
+        let output_bus = Bus::try_from(vec![
             Signal::new(0.0, "o1", "rpm"),
-        ]);
+        ]).unwrap();
 
         let mut model = SpaceStateModel::new("model", 
             &state_bus.get_sigdef(), 
@@ -456,10 +454,10 @@ mod simmodel_test {
             &output_bus.get_sigdef(), 
             SolverType::Euler).unwrap();
         model.set_mtrx_a(&[1.0, 0.0, 0.0, 1.0]).unwrap();
-        model.set_mtrx_b(&[1.0, 2.0]);
-        model.set_mtrx_c(&[1.0, 0.0]);
+        model.set_mtrx_b(&[1.0, 2.0]).unwrap();
+        model.set_mtrx_c(&[1.0, 0.0]).unwrap();
         
-        model.interface_in(&input_bus); // 入力のテスト
+        model.interface_in(&input_bus).unwrap(); // 入力のテスト
         
         model.nextstate(1.0);  
 
@@ -575,10 +573,9 @@ mod simmodel_test {
         let output_def = vec![SigDef::new("o1", "rpm")];
         let mut ssm = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
 
-        ssm.set_mtrx_a(&[0.0, -0.5, 1.0, -0.5]);
-        ssm.set_mtrx_b(&[1.0, 1.0]);
-        ssm.set_mtrx_c(&[0.0, 1.0]);
-        ssm.set_mtrx_c(&[0.0]);
+        ssm.set_mtrx_a(&[0.0, -0.5, 1.0, -0.5]).unwrap();
+        ssm.set_mtrx_b(&[1.0, 1.0]).unwrap();
+        ssm.set_mtrx_c(&[0.0, 1.0]).unwrap();
 
         assert_eq!(tfmodel.model.mtrx_a, ssm.mtrx_a);
         assert_eq!(tfmodel.model.mtrx_b, ssm.mtrx_b);

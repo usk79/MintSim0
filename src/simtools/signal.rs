@@ -2,11 +2,10 @@ use std::fmt;
 use std::collections::HashMap;
 use std::ops::Index;
 use std::ops::IndexMut;
-use std::convert::From;
-use core::slice::{Iter, IterMut};
 
-extern crate nalgebra as na;
-use na::{DMatrix};
+use std::convert::TryFrom;
+
+use core::slice::{Iter, IterMut};
 
 use anyhow::{*};
 
@@ -105,12 +104,14 @@ impl Bus {
         Ok(())
     }
 
+    /// 引数signalについて、自身のBusに同じ名前があれば値を更新する
     pub fn update(&mut self, signal: &Signal) {
         if let Some(idx) = self.keytable.get(signal.name()) {
             self.signals[*idx].value = signal.value;
         } // 登録されていない信号に対しては何もしない
     }
 
+    /// 引数Bus内のデータのうち同じ信号名があるものをコピーする
     pub fn update_from_bus(&mut self, bus: &Bus) {
         bus.iter().for_each(|sig| self.update(sig));
     }
@@ -152,6 +153,11 @@ impl Bus {
         }
 
         Ok(())
+    }
+
+    /// Signalsのvalue値を集めたVecを返す。データの順番は保持
+    pub fn to_vec_f64(&self) -> Vec<f64> {
+        self.signals.iter().map(|sig| sig.value).collect::<Vec<f64>>()
     }
 
     /// Vec<SigDef>を返す。モデルの作成時に使用する。
@@ -198,24 +204,37 @@ impl fmt::Display for Bus {
 }
 
 /// Fromトレイトの実装
-impl From<Vec<Signal>> for Bus {
-    fn from(signals: Vec<Signal>) -> Self {
+impl TryFrom<Vec<Signal>> for Bus {
+    type Error = anyhow::Error;
+
+    fn try_from(signals: Vec<Signal>) -> anyhow::Result<Self> {
         // keytableを事前に作成しておく
         let mut keytable = HashMap::<String, usize>::new();
 
         for (idx, sig) in signals.iter().enumerate() {
-            keytable.insert(sig.name().to_string(), idx);
+            let keyname = sig.name().to_string();
+            match keytable.contains_key(&keyname) {
+                true => {
+                    return Err(anyhow!("信号名が重複しています。: 信号名{}", keyname));
+                },
+                false => {
+                    keytable.insert(sig.name().to_string(), idx);
+                }
+            }
         }
 
-        Self {
+        Ok(Self {
             signals: signals,
             keytable: keytable,
-        }
+        })
     }
 }
 
-impl From<Vec<SigDef>> for Bus {
-    fn from(sigdef: Vec<SigDef>) -> Self {
+impl TryFrom<Vec<SigDef>> for Bus {
+    type Error = anyhow::Error;
+
+    fn try_from(sigdef: Vec<SigDef>) -> anyhow::Result<Self> {
+        
         let mut keytable = HashMap::<String, usize>::new();
         let mut signals = Vec::new();
 
@@ -223,7 +242,7 @@ impl From<Vec<SigDef>> for Bus {
             let keyname = sig.name().to_string();
             match keytable.contains_key(&keyname) {
                 true => {
-                    panic!("信号名が重複しています。: 信号名{}", keyname);
+                    return Err(anyhow!("信号名が重複しています。: 信号名{}", keyname));
                 },
                 false => {
                     keytable.insert(keyname, signals.len());
@@ -232,10 +251,10 @@ impl From<Vec<SigDef>> for Bus {
             }
         }
 
-        Self {
+        Ok(Self {
             signals: signals,
             keytable: keytable,
-        }
+        })
     }
 }
 
@@ -269,8 +288,8 @@ mod signal_test {
         let b = Signal::new(1.0, "b", "A");
 
         let mut list = Bus::new();
-        list.push(a);
-        list.push(b);
+        list.push(a).unwrap();
+        list.push(b).unwrap();
         println!("{}", list);
     }
 
@@ -280,8 +299,8 @@ mod signal_test {
         let b = Signal::new(1.0, "b", "A");
 
         let mut list = Bus::new();
-        list.push(a);
-        list.push(b);
+        list.push(a).unwrap();
+        list.push(b).unwrap();
 
         assert_eq!(list[0].value, 0.0);
         assert_eq!(list[1].value, 1.0);
@@ -305,7 +324,7 @@ mod signal_test {
         let copiedsig = sigvec.clone();
 
         //let bus:Bus = signals.into();　// Bus::fromと同じ意味
-        let bus = Bus::from(sigvec);
+        let bus = Bus::try_from(sigvec).unwrap();
 
         for (idx, _sig) in copiedsig.iter().enumerate() {
             assert_eq!(bus[idx], copiedsig[idx]);
@@ -321,7 +340,7 @@ mod signal_test {
             Signal::new(0.0, "motor_current", "A"),
         ];
 
-        let mut bus = Bus::from(sigvec);
+        let mut bus = Bus::try_from(sigvec).unwrap();
 
         let mut busiter = bus.iter();
         assert_eq!(busiter.next(), Some(&Signal::new(0.0, "motor_trq", "Nm")));
@@ -342,18 +361,23 @@ mod signal_test {
     }
 
     #[test]
-    fn setsig_test() {
-        let state_def = vec![SigDef::new("s1", "Nm"), SigDef::new("s2", "rpm")];
-        let mut bus = Bus::new();
-        let testvec = vec![Signal::new(0.0, "s1", "Nm"), Signal::new(0.0, "s2", "rpm")];
+    fn bus_tryfrom_test() {
+        let bus = Bus::try_from(vec![SigDef::new("a", "u"), SigDef::new("b", "u")]).unwrap();
 
-        bus.set_sigdef(&state_def);
+        assert_eq!(bus[0], Signal::new(0.0, "a", "u"));
+        assert_eq!(bus[1], Signal::new(0.0, "b", "u"));
 
-        assert_eq!(bus.signals, testvec);
+        let bus = Bus::try_from(vec![Signal::new(0.0, "a", "u"), Signal::new(0.0, "b", "u")]).unwrap();
 
-        bus.set_sigdef(&state_def);
+        assert_eq!(bus[0], Signal::new(0.0, "a", "u"));
+        assert_eq!(bus[1], Signal::new(0.0, "b", "u"));
+    }
 
-        assert_eq!(bus.signals, testvec);
+    #[test]
+    #[should_panic]
+    fn bus_tryfrom_failtest() {
+        let bus = Bus::try_from(vec![SigDef::new("b", "u"), SigDef::new("b", "u")]).unwrap();
 
+        let bus = Bus::try_from(vec![Signal::new(0.0, "b", "u"), Signal::new(0.0, "b", "u")]).unwrap();
     }
 }

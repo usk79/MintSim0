@@ -156,9 +156,9 @@ mod simrun_test {
             let simset = SimSet::new(0.001, 0.0000001);
 
             let mut bus = Bus::new();
-            bus.set_sigdef(&input_def);
-            bus.set_sigdef(&output_def);
-            bus.set_sigdef(&state_def);
+            bus.set_sigdef(&input_def).unwrap();
+            bus.set_sigdef(&output_def).unwrap();
+            bus.set_sigdef(&state_def).unwrap();
 
             let scope = SimScope::new(&bus.get_sigdef(), simset.get_stepnum());
     
@@ -177,15 +177,15 @@ mod simrun_test {
         }
     
         fn init_sim(&mut self) {
-            self.model.init_state(&[0.0, 0.0001]);
+            self.model.init_state(&[0.0, 0.0001]).unwrap();
         }
     
         fn step_sim(&mut self, time: f64) {
             let mut input_bus = Bus::new();
             let input_sig = Signal::new(0.10, "v", "V");
-            input_bus.push(input_sig);
+            input_bus.push(input_sig).unwrap();
 
-            self.model.interface_in(&input_bus);
+            self.model.interface_in(&input_bus).unwrap();
 
             self.model.nextstate(self.simset.get_deltat());
 
@@ -197,12 +197,12 @@ mod simrun_test {
             let state_bus = self.model.get_statebus();
             self.bus.update_from_bus(&state_bus);
 
-            self.scope_out.push(time, &self.bus);
+            self.scope_out.push(time, &self.bus).unwrap();
         }
     
         fn after_sim(&mut self) {
-            self.scope_out.export("test_output\\rlc.csv");
-            self.scope_out.timeplot_all("test_output\\rlc.png", (500, 500), (3, 2));
+            self.scope_out.export("test_output\\rlc.csv").unwrap();
+            self.scope_out.timeplot_all("test_output\\rlc.png", (500, 500), (3, 2)).unwrap();
         }
     }
 
@@ -216,7 +216,6 @@ mod simrun_test {
 
     struct BallAndBeam {
         x: DMatrix<f64>, // 状態ベクトル
-        u: f64, // 入力トルク [Nm]
         rball: f64, // ボールの半径[m]
         mball: f64, // ボール重量[kg]
         jball: f64, // ボールの慣性モーメント[kg・m^2]
@@ -225,7 +224,7 @@ mod simrun_test {
         k: f64, // 空気抵抗係数[N/(m/s)^2]
         m0: f64, // 途中計算
         m1: f64, // 途中計算
-        input_bus: Bus, // 入力バス
+        u: Bus, // 入力バス(入力トルク)
         output_bus: Bus, // 出力バス
         state_bus: Bus, // 状態バス
     }
@@ -250,19 +249,18 @@ mod simrun_test {
             state[2] = init_theta;
             state[3] = init_omega;
 
-            let input_bus = Bus::from(vec![SigDef::new("trq", "Nm")]);
-            let output_bus = Bus::from(vec![SigDef::new("ball_pos", "m")]);
+            let input_bus = Bus::try_from(vec![SigDef::new("trq", "Nm")]).unwrap();
+            let output_bus = Bus::try_from(vec![SigDef::new("ball_pos", "m")]).unwrap();
 
-            let state_bus = Bus::from(vec![
+            let state_bus = Bus::try_from(vec![
                 SigDef::new("ball_r", "m"),
                 SigDef::new("ball_v", "m/s"),
                 SigDef::new("beam_angle", "deg"),
                 SigDef::new("beam_rot", "deg/s"),
-            ]);
+            ]).unwrap();
 
             Self {
                 x: state,
-                u: 0.0,
                 rball: rball, 
                 mball: mball,
                 jball: jball,
@@ -271,7 +269,7 @@ mod simrun_test {
                 mu: mu,
                 m0: m0,
                 m1: m1,
-                input_bus: input_bus,
+                u: input_bus,
                 output_bus: output_bus,
                 state_bus: state_bus,
             }
@@ -284,7 +282,7 @@ mod simrun_test {
 
     impl Model for BallAndBeam {
         fn input_bus(&mut self) -> &mut Bus {
-            &mut self.input_bus
+            &mut self.u
         }
 
         fn output_bus(&self) -> &Bus {
@@ -292,7 +290,6 @@ mod simrun_test {
         }
 
         fn nextstate(&mut self, delta_t: f64) {
-            self.u = self.input_bus[0].value;
             self.rungekutta_method(delta_t);
 
             self.output_bus[0].value = self.x[0];
@@ -311,7 +308,7 @@ mod simrun_test {
             slope[2] = x[3];
             // omega
             let j0 = self.mball * x[0] * x[0] + self.jbeam + self.jball;
-            slope[3] = (self.u - 2.0 * self.mball * x[0] * x[1] * x[3] + self.mball * G * x[0] * x[2].cos()) / j0;
+            slope[3] = (self.u[0].value - 2.0 * self.mball * x[0] * x[1] * x[3] + self.mball * G * x[0] * x[2].cos()) / j0;
 
             slope
         }
@@ -324,6 +321,4 @@ mod simrun_test {
             &self.x
         }
     }
-
-
 }

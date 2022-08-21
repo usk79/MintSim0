@@ -130,11 +130,11 @@ mod scope_test {
 
     #[test]
     fn scope_pushtest() {
-        let mut bus = Bus::from(vec![
+        let mut bus = Bus::try_from(vec![
             Signal::new(0.0, "motor_trq", "Nm"),
             Signal::new(0.0, "motor_volt", "V"),
             Signal::new(0.0, "motor_current", "A"),
-        ]);
+        ]).unwrap();
 
         let mut scope = SimScope::new(&bus.get_sigdef(), 10);
 
@@ -143,11 +143,11 @@ mod scope_test {
             bus[1].value = (i * 2) as f64;
             bus[2].value = (i * 3) as f64;
 
-            scope.push(i as f64 * 0.01, &bus);
+            scope.push(i as f64 * 0.01, &bus).unwrap();
         }
 
-        scope.export("test_output\\scope_pushtest.csv");
-        scope.timeplot_all("test_output\\scope_pushtest.png", (500, 500), (3, 1));
+        scope.export("test_output\\scope_pushtest.csv").unwrap();
+        scope.timeplot_all("test_output\\scope_pushtest.png", (500, 500), (3, 1)).unwrap();
 
         assert_eq!(scope.storage[0][9], 9.0);
         assert_eq!(scope.storage[1][9], 18.0);
