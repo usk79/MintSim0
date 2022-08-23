@@ -556,13 +556,13 @@ mod simmodel_test {
     #[test]
     #[should_panic]
     fn tf_set_errtest1() {
-        let model = TransFuncModel::new("model", &[1.0, 0.0, 2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();       
+        let _model = TransFuncModel::new("model", &[1.0, 0.0, 2.0, 2.0], &[2.0, 1.0, 1.0], SolverType::Euler).unwrap();       
     }
 
     #[test]
     #[should_panic]
     fn tf_set_errtest2() {
-        let model = TransFuncModel::new("model", &[1.0], &[2.0], SolverType::Euler).unwrap();       
+        let _model = TransFuncModel::new("model", &[1.0], &[2.0], SolverType::Euler).unwrap();       
     }
 
     #[test]

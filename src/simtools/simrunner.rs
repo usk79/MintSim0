@@ -38,11 +38,11 @@ pub trait SimTarget {
     /// シミュレーション設定取得
     fn get_simset(&self) -> SimSet;
     /// シミュレーション初期化
-    fn init_sim(&mut self);
+    fn init_sim(&mut self) -> anyhow::Result<()> { Ok(()) } // 空のデフォルト定義
     /// ステップ実行
-    fn step_sim(&mut self, time: f64);
+    fn step_sim(&mut self, time: f64) -> anyhow::Result<()>;
     /// シミュレーション完了後の処理
-    fn after_sim(&mut self);
+    fn after_sim(&mut self) -> anyhow::Result<()> { Ok(()) } // 空のデフォルト定義
 }
 
 #[derive(Debug)]
@@ -112,16 +112,9 @@ mod simrun_test {
             self.simset
         }
     
-        fn init_sim(&mut self) {
-            
-        }
-    
-        fn step_sim(&mut self, time: f64) {
+        fn step_sim(&mut self, time: f64) -> anyhow::Result<()> {
             self.model.nextstate(self.simset.get_deltat());
-        }
-    
-        fn after_sim(&mut self) {
-    
+            Ok(())
         }
     }
     
@@ -176,16 +169,17 @@ mod simrun_test {
             self.simset
         }
     
-        fn init_sim(&mut self) {
-            self.model.init_state(&[0.0, 0.0001]).unwrap();
+        fn init_sim(&mut self) -> anyhow::Result<()> {
+            self.model.init_state(&[0.0, 0.0001])?;
+            Ok(())
         }
     
-        fn step_sim(&mut self, time: f64) {
+        fn step_sim(&mut self, time: f64) -> anyhow::Result<()> {
             let mut input_bus = Bus::new();
             let input_sig = Signal::new(0.10, "v", "V");
-            input_bus.push(input_sig).unwrap();
+            input_bus.push(input_sig)?;
 
-            self.model.interface_in(&input_bus).unwrap();
+            self.model.interface_in(&input_bus)?;
 
             self.model.nextstate(self.simset.get_deltat());
 
@@ -197,12 +191,16 @@ mod simrun_test {
             let state_bus = self.model.get_statebus();
             self.bus.update_from_bus(&state_bus);
 
-            self.scope_out.push(time, &self.bus).unwrap();
+            self.scope_out.push(time, &self.bus)?;
+
+            Ok(())
         }
     
-        fn after_sim(&mut self) {
-            self.scope_out.export("test_output\\rlc.csv").unwrap();
-            self.scope_out.timeplot_all("test_output\\rlc.png", (500, 500), (3, 2)).unwrap();
+        fn after_sim(&mut self) -> anyhow::Result<()> {
+            self.scope_out.export("test_output\\rlc.csv")?;
+            self.scope_out.timeplot_all("test_output\\rlc.png", (500, 500), (3, 2))?;
+
+            Ok(())
         }
     }
 
@@ -275,7 +273,7 @@ mod simrun_test {
             }
         }
 
-        pub fn get_state(&self) -> &Bus {
+        pub fn state_bus(&self) -> &Bus {
             &self.state_bus
         }
     }
@@ -319,6 +317,42 @@ mod simrun_test {
     
         fn get_state(&self) -> &DMatrix<f64> {
             &self.x
+        }
+    }
+
+    struct SimBAB {
+        simset: SimSet,
+        model: BallAndBeam,
+        scope: SimScope,
+    }
+
+    impl SimBAB {
+        fn new() -> Self {
+            let simset = SimSet::new(10.0, 0.001);
+            let mut model = BallAndBeam::new(0.5, 0.0, 0.0, 0.0);
+            let mut bus_for_scope = Bus::new();
+            
+            bus_for_scope.set_sigdef(&model.input_bus().get_sigdef());
+            bus_for_scope.set_sigdef(&model.output_bus().get_sigdef());
+            bus_for_scope.set_sigdef(&model.state_bus().get_sigdef());
+
+            let scope = SimScope::new(&bus_for_scope.get_sigdef(), simset.get_stepnum());
+
+            Self {
+                simset: simset,
+                model: model,
+                scope: scope,
+            }
+        }
+    }
+
+    impl SimTarget for SimBAB {
+        fn get_simset(&self) -> SimSet {
+            self.simset
+        }
+
+        fn step_sim(&mut self, time: f64) -> anyhow::Result<()> {
+            Ok(())
         }
     }
 }
