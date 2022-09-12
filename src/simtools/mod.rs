@@ -1,6 +1,6 @@
 
-/// 物理演算でよく使う定数の定義
-pub mod simconsts;
+/// 物理演算でよく使う定数の定義 共通の便利メソッドなど
+pub mod simcommon;
 /// mintsim共通で使う信号とそれをまとめるsignalbusの定義
 pub mod signal;
 /// modelトレイトの宣言といくつかのモデルを提供

@@ -75,7 +75,7 @@ impl<T> SimRunner<T>
             self.target.step_sim(self.simset.get_deltat() * idx as f64);
         }
 
-        self.target.after_sim();
+        self.target.after_sim().unwrap();
 
         Ok(())
     }
@@ -87,8 +87,8 @@ mod simrun_test {
     use crate::simtools::signal::{*};
     use crate::simtools::simscope::{*};
     use crate::simtools::simmodel::{*};
+    use crate::simtools::simcommon::{*};
 
-    use crate::simtools::simconsts::G;
     use nalgebra::DMatrix;
 
     struct SampleTarget {
@@ -291,6 +291,11 @@ mod simrun_test {
             self.rungekutta_method(delta_t);
 
             self.output_bus[0].value = self.x[0];
+            //self.state_bus.iter_mut().enumerate().for_each(|(i, e)| e.value = self.x[i]);
+            self.state_bus[0].value = self.x[0];
+            self.state_bus[1].value = self.x[1];
+            self.state_bus[2].value = self.x[2].rad2deg();
+            self.state_bus[3].value = self.x[3].rad2deg();
         }
     }
 
@@ -322,26 +327,28 @@ mod simrun_test {
 
     struct SimBAB {
         simset: SimSet,
-        model: BallAndBeam,
+        bab_model: BallAndBeam,
         scope: SimScope,
+        mainbus: Bus,
     }
 
     impl SimBAB {
         fn new() -> Self {
-            let simset = SimSet::new(10.0, 0.001);
-            let mut model = BallAndBeam::new(0.5, 0.0, 0.0, 0.0);
+            let simset = SimSet::new(200.0, 0.001);
+            let mut model = BallAndBeam::new(0.05, 0.0, 0.0, 0.0);
             let mut bus_for_scope = Bus::new();
             
-            bus_for_scope.set_sigdef(&model.input_bus().get_sigdef());
-            bus_for_scope.set_sigdef(&model.output_bus().get_sigdef());
-            bus_for_scope.set_sigdef(&model.state_bus().get_sigdef());
+            bus_for_scope.set_sigdef(&model.input_bus().get_sigdef()).unwrap();
+            bus_for_scope.set_sigdef(&model.output_bus().get_sigdef()).unwrap();
+            bus_for_scope.set_sigdef(&model.state_bus().get_sigdef()).unwrap();
 
             let scope = SimScope::new(&bus_for_scope.get_sigdef(), simset.get_stepnum());
-
+            
             Self {
                 simset: simset,
-                model: model,
+                bab_model: model,
                 scope: scope,
+                mainbus: bus_for_scope,
             }
         }
     }
@@ -352,7 +359,37 @@ mod simrun_test {
         }
 
         fn step_sim(&mut self, time: f64) -> anyhow::Result<()> {
+            let mut input = Bus::new();
+            let mut bus = Bus::new();
+            input.set_sigdef(&self.bab_model.input_bus().get_sigdef()).unwrap();
+
+            input[0].value = 0.0;
+
+            self.bab_model.interface_in(&input)?;
+            self.bab_model.nextstate(self.simset.get_deltat());
+
+            self.mainbus.update_from_bus(&input);
+            self.mainbus.update_from_bus(&self.bab_model.interface_out());
+            self.mainbus.update_from_bus(&self.bab_model.state_bus());
+
+            self.scope.push(time, &self.mainbus)?;
+
             Ok(())
         }
+
+        fn after_sim(&mut self) -> anyhow::Result<()> {
+            self.scope.export("test_output\\bab.csv")?;
+            self.scope.timeplot_all("test_output\\bab.png", (500, 500), (3, 2))?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn bab_test() {
+        let target = SimBAB::new();
+        let mut sim = SimRunner::new(target);
+
+        sim.run_sim().unwrap();
     }
 }
