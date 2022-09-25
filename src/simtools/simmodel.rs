@@ -390,6 +390,76 @@ impl fmt::Display for TransFuncModel {
     }
 }
 
+/// 積分器モデル
+#[derive(Debug, Clone)]
+pub struct Integrator {
+    elemnum: usize,
+    x: DMatrix<f64>,
+    u: DMatrix<f64>,         // 入力ベクトル
+    input_bus: Bus,
+    output_bus: Bus,
+    solver: SolverType,      // ソルバータイプ
+}
+
+impl Integrator {
+    pub fn new(input_def: &Vec<SigDef>, output_def: &Vec<SigDef>, solvertype: SolverType) -> Self {
+        let elemnum = input_def.len();
+
+        let mut input_bus = Bus::new();
+        input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
+        let mut output_bus = Bus::new();
+        output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
+
+        // inputとoutputの長さが同じかどうかのチェックが必要？
+        Self {
+            x: DMatrix::from_element(elemnum, 1, 0.0), 
+            u: DMatrix::from_element(elemnum, 1, 0.0),
+            elemnum: elemnum,
+            input_bus: input_bus,
+            output_bus: output_bus,
+            solver: solvertype,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.x = DMatrix::from_element(self.elemnum, 1, 0.0);
+    }
+}
+
+impl DEModel for Integrator {
+    fn derivative_func(&self, _x: &DMatrix<f64>) -> DMatrix<f64> {
+        self.u.clone()
+    }
+
+    fn set_state(&mut self, newstate: DMatrix<f64>) {
+        self.x = newstate; 
+    }
+
+    fn get_state(&self) -> &DMatrix<f64> {
+        &self.x
+    }
+}
+
+impl Model for Integrator {
+    fn input_bus(&mut self) -> &mut Bus {
+        &mut self.input_bus
+    }
+
+    fn output_bus(&self) -> &Bus {
+        &self.output_bus
+    }
+
+    fn nextstate(&mut self, delta_t: f64) {
+        self.u.iter_mut().enumerate().for_each(|(i, elem)| *elem = self.input_bus[i].value);
+
+        match self.solver { 
+            SolverType::Euler => self.euler_method(delta_t),
+            SolverType::RungeKutta => self.rungekutta_method(delta_t),
+        }
+
+        self.output_bus.iter_mut().enumerate().for_each(|(i, elem)| elem.value = self.x[i]);
+    }
+}
 
 #[cfg(test)]
 mod simmodel_test {

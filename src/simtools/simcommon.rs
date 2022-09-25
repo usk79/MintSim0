@@ -34,28 +34,4 @@ impl UnitTrans for f64 {
     }
 }
 
-/// 積分器
-pub struct Integrator {
-    sample_time: f64,
-    elemnum: usize,
-    x: DVector<f64>,
-}
 
-impl Integrator {
-    pub fn new(elemnum: usize, sample_time: f64) -> Self {
-        Self {
-            x: DVector::from_element(elemnum, 0.0), 
-            elemnum: elemnum,
-            sample_time: sample_time,
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.x = DVector::from_element(self.elemnum, 0.0);
-    }
-
-    pub fn calc(&mut self, x: &[f64]) {
-
-    }
-
-}
