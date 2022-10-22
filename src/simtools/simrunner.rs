@@ -1,6 +1,8 @@
 use anyhow::{*};
 //use crate::simtools::simmodel::{*};
 
+use std::f64::consts::{PI};
+
 // 今後の実装メモ
 // Modelごとにサンプリングタイムが違う場合でも対応できるように、
 // サンプリングの時間が異なる場合を吸収できる方法が必要
@@ -388,6 +390,74 @@ mod simrun_test {
     #[test]
     fn bab_test() {
         let target = SimBAB::new();
+        let mut sim = SimRunner::new(target);
+
+        sim.run_sim().unwrap();
+    }
+
+    // Integratorのテスト
+    struct SimIntegrator {
+        simset: SimSet,
+        model: Integrator,
+        scope: SimScope,
+        bus: Bus,
+    }
+
+    impl SimIntegrator {
+        fn new() -> Self {
+            let simset = SimSet::new(10.0, 0.001);
+            let ins = vec![SigDef::new("u1", "-"), SigDef::new("u2", "-"), SigDef::new("u3", "-")];
+            let outs: Vec<SigDef> = vec![SigDef::new("o1", "-"), SigDef::new("o2", "-"), SigDef::new("o3", "-")];
+
+            let model = Integrator::new(&ins, &outs, SolverType::Euler);
+
+            let mut bus = Bus::new();
+
+            bus.set_sigdef(&ins).unwrap();
+            bus.set_sigdef(&outs).unwrap();
+
+            let scope = SimScope::new(&bus.get_sigdef(), simset.get_stepnum());
+
+            Self {
+                simset: simset,
+                model: model,
+                scope: scope,
+                bus: bus,
+            }
+        }
+    }
+
+    impl SimTarget for SimIntegrator {
+        fn get_simset(&self) -> SimSet {
+            self.simset
+        }
+
+        fn step_sim(&mut self, time: f64) -> anyhow::Result<()> {
+            let val = self.bus.get_by_name("o1").unwrap().value;
+
+            self.bus.update(&mut Signal::new(1.0, "u1", "-"));
+            self.bus.update(&mut Signal::new(val, "u2", "-"));
+            self.bus.update(&mut Signal::new((val + PI / 2.0).sin(), "u3", "-"));
+
+            self.model.interface_in(&self.bus).unwrap();
+            self.model.nextstate(self.simset.get_deltat());
+            
+            self.bus.update_from_bus(self.model.output_bus());
+
+            self.scope.push(time, &self.bus).unwrap();
+
+            Ok(())
+        }
+
+        fn after_sim(&mut self) -> anyhow::Result<()> {
+            self.scope.export("test_output\\integ.csv").unwrap();
+            self.scope.timeplot_all("test_output\\integ.png", (800, 500), (2, 3))
+        }
+    }
+
+    #[test]
+    fn integrator_test() {
+        let target = SimIntegrator::new();
         let mut sim = SimRunner::new(target);
 
         sim.run_sim().unwrap();
