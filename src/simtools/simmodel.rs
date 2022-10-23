@@ -461,6 +461,75 @@ impl Model for Integrator {
     }
 }
 
+/// PIDコントローラモデル
+#[derive(Debug, Clone)]
+struct PIDController {
+    integrator: Integrator, // 積分器
+    u_old: Vec<f64>, // 入力前回値（微分用）
+    in_bus: Bus,
+    out_bus: Bus,
+    gain_vec: Vec<(f64, f64, f64)> // PIDゲイン配列
+}
+
+impl PIDController {
+    fn new(input_def: &Vec<SigDef>, output_def: &Vec<SigDef>, gain_vec: Vec<(f64, f64, f64)>, solvertype: SolverType) -> anyhow::Result<Self> {
+        let elemnum = input_def.len();
+        if elemnum != output_def.len() || elemnum != gain_vec.len(){
+            return Err(anyhow!("PIDController: 入力信号と出力信号とゲインベクトルの要素数は等しく設定してください。"))
+        }
+
+        let mut input_bus = Bus::new();
+        input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
+        let mut output_bus = Bus::new();
+        output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
+
+        // Integrator用のSigDefを作る
+        let integ_in = (0..elemnum).map(|x| SigDef::new(format!("u{}", x), "-")).collect();
+        let integ_out = (0..elemnum).map(|x| SigDef::new(format!("o{}", x), "-")).collect();
+        let integrator = Integrator::new(&integ_in, &integ_out, solvertype);
+
+        let uvec = (0..elemnum).map(|_| 0.0).collect();
+
+        Ok(Self {
+            integrator: integrator,
+            u_old: uvec,
+            in_bus: input_bus,
+            out_bus: output_bus,
+            gain_vec: gain_vec,
+        })
+    }
+
+    fn reset(&mut self) {
+        self.integrator.reset();
+    }
+}
+
+impl Model for PIDController {
+    fn input_bus(&mut self) -> &mut Bus {
+        &mut self.in_bus
+    }
+
+    fn output_bus(&self) -> &Bus {
+        &self.out_bus
+    }
+
+    fn nextstate(&mut self, delta_t: f64) {
+        
+        self.integrator.interface_in(&self.in_bus).unwrap(); // 積分器への入力を与える
+        self.integrator.nextstate(delta_t); // 積分する
+
+        self.out_bus.iter_mut().enumerate().for_each(|(idx, out)| {
+            let u = self.in_bus[idx].value;
+            let gain = self.gain_vec[idx];
+            let integ = self.integrator.interface_out()[idx].value; // 積分器の結果を取得
+            let diff = (u - self.u_old[idx]) / delta_t; // 単純微分
+            out.value = gain.0 * u + gain.1 * integ + gain.2 * diff; // 出力計算
+            self.u_old[idx] = u; // 前回値更新
+        });
+
+    }
+}
+
 #[cfg(test)]
 mod simmodel_test {
     use super::*;
