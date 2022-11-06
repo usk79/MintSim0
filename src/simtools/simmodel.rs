@@ -463,25 +463,30 @@ impl Model for Integrator {
 
 /// PIDコントローラモデル
 #[derive(Debug, Clone)]
-struct PIDController {
+pub struct PIDController {
     integrator: Integrator, // 積分器
     u_old: Vec<f64>, // 入力前回値（微分用）
     in_bus: Bus,
     out_bus: Bus,
+    target_bus: Bus, // 目標値入力用
     gain_vec: Vec<(f64, f64, f64)> // PIDゲイン配列
 }
 
 impl PIDController {
-    fn new(input_def: &Vec<SigDef>, output_def: &Vec<SigDef>, gain_vec: Vec<(f64, f64, f64)>, solvertype: SolverType) -> anyhow::Result<Self> {
+    pub fn new(input_def: &Vec<SigDef>, output_def: &Vec<SigDef>, target_def: &Vec<SigDef>, gain_vec: Vec<(f64, f64, f64)>, solvertype: SolverType) -> anyhow::Result<Self> {
         let elemnum = input_def.len();
-        if elemnum != output_def.len() || elemnum != gain_vec.len(){
-            return Err(anyhow!("PIDController: 入力信号と出力信号とゲインベクトルの要素数は等しく設定してください。"))
+        if elemnum != output_def.len() || elemnum != gain_vec.len() || elemnum != target_def.len() {
+            return Err(anyhow!("PIDController: 入力信号/出力信号/目標値信号/ゲインベクトルの要素数は等しく設定してください。"))
         }
 
         let mut input_bus = Bus::new();
-        input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
+        input_bus.set_sigdef(input_def);
+        //input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
         let mut output_bus = Bus::new();
-        output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
+        output_bus.set_sigdef(output_def);
+        //output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
+        let mut target_bus = Bus::new();
+        target_bus.set_sigdef(target_def);
 
         // Integrator用のSigDefを作る
         let integ_in = (0..elemnum).map(|x| SigDef::new(format!("u{}", x), "-")).collect();
@@ -495,12 +500,28 @@ impl PIDController {
             u_old: uvec,
             in_bus: input_bus,
             out_bus: output_bus,
+            target_bus: target_bus,
             gain_vec: gain_vec,
         })
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.integrator.reset();
+    }
+
+    pub fn set_target(&mut self, signals: &Bus) -> anyhow::Result<()> {
+        for elem in self.target_bus.iter_mut() {
+            let signal = signals.get_by_name(elem.name())
+                .with_context(|| format!("信号名:{}が見つかりません。", elem.name()))?;
+
+            elem.value = signal.value;
+        };
+
+        Ok(())
+    }
+
+    pub fn target_bus(&self) -> &Bus {
+        &&self.target_bus
     }
 }
 
@@ -515,11 +536,14 @@ impl Model for PIDController {
 
     fn nextstate(&mut self, delta_t: f64) {
         
-        self.integrator.interface_in(&self.in_bus).unwrap(); // 積分器への入力を与える
+        self.integrator.input_bus().iter_mut().enumerate().for_each(
+            |(idx, sig)| sig.value = self.in_bus[idx].value
+        ); // 積分器への入力を与える
+
         self.integrator.nextstate(delta_t); // 積分する
 
         self.out_bus.iter_mut().enumerate().for_each(|(idx, out)| {
-            let u = self.in_bus[idx].value;
+            let u = self.target_bus[idx].value - self.in_bus[idx].value; // 目標値 - 現在値
             let gain = self.gain_vec[idx];
             let integ = self.integrator.interface_out()[idx].value; // 積分器の結果を取得
             let diff = (u - self.u_old[idx]) / delta_t; // 単純微分

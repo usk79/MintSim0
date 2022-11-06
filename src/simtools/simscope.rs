@@ -11,6 +11,8 @@ use plotters::coord::Shift;
 /**
 Busに登録されている信号をシミュレーション時間分保存する。
 保存されたデータをグラフにプロットしたり、ファイルへの書き出し機能を有する
+
+修正メモ：SimScopeもModelTraitを実装する。InterfaceOut側はInputをスルーさせる形で実装する
 */
 
 #[derive(Debug)]
