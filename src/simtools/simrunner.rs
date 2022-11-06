@@ -351,7 +351,7 @@ mod simrun_test {
                 &ctrlin, 
                 &ctrlout, 
                 &target,
-                vec![(0.1, 0.00, 0.00)], 
+                vec![(0., 0.00, 0.00)], 
 //                vec![(0.0, 0.0, 0.0)], 
                 SolverType::RungeKutta
             ).unwrap();
