@@ -1,8 +1,6 @@
 use anyhow::{*};
 //use crate::simtools::simmodel::{*};
 
-use std::f64::consts::{PI};
-
 // 今後の実装メモ
 // Modelごとにサンプリングタイムが違う場合でも対応できるように、
 // サンプリングの時間が異なる場合を吸収できる方法が必要
@@ -90,7 +88,7 @@ mod simrun_test {
     use crate::simtools::simscope::{*};
     use crate::simtools::simmodel::{*};
     use crate::simtools::simcommon::{*};
-
+    use std::f64::consts::{PI};
     use nalgebra::DMatrix;
 
     struct SampleTarget {
@@ -114,7 +112,7 @@ mod simrun_test {
             self.simset
         }
     
-        fn step_sim(&mut self, time: f64) -> anyhow::Result<()> {
+        fn step_sim(&mut self, _time: f64) -> anyhow::Result<()> {
             self.model.nextstate(self.simset.get_deltat());
             Ok(())
         }
@@ -335,7 +333,6 @@ mod simrun_test {
         beam_ctrl: PIDController, 
         ball_ctrl: PIDController,
         scope: SimScope,
-        beambus: Bus,
         mainbus: Bus,
         ctrlbus: Bus,
         ctrlscope: SimScope,
@@ -371,9 +368,6 @@ mod simrun_test {
                 SolverType::RungeKutta
             ).unwrap();
 
-            let mut beam_bus = Bus::new();
-            beam_bus.set_sigdef(&vec![SigDef::new("beam_angle", "deg"), SigDef::new("target_beam_angle", "deg")]).unwrap();
-
             bus_for_scope.set_sigdef(&model.input_bus().get_sigdef()).unwrap();
             bus_for_scope.set_sigdef(&model.output_bus().get_sigdef()).unwrap();
             bus_for_scope.set_sigdef(&model.state_bus().get_sigdef()).unwrap();
@@ -390,7 +384,6 @@ mod simrun_test {
                 simset: simset,
                 bab_model: model,
                 scope: scope,
-                beambus: beam_bus,
                 mainbus: bus_for_scope,
                 beam_ctrl,
                 ball_ctrl,

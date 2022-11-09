@@ -480,13 +480,13 @@ impl PIDController {
         }
 
         let mut input_bus = Bus::new();
-        input_bus.set_sigdef(input_def);
+        input_bus.set_sigdef(input_def)?;
         //input_def.iter().for_each(|sig| input_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
         let mut output_bus = Bus::new();
-        output_bus.set_sigdef(output_def);
+        output_bus.set_sigdef(output_def)?;
         //output_def.iter().for_each(|sig| output_bus.push(Signal::new(0.0, sig.name(), sig.unit())).unwrap());
         let mut target_bus = Bus::new();
-        target_bus.set_sigdef(target_def);
+        target_bus.set_sigdef(target_def)?;
 
         // Integrator用のSigDefを作る
         let integ_in = (0..elemnum).map(|x| SigDef::new(format!("u{}", x), "-")).collect();
@@ -559,9 +559,9 @@ impl Model for PIDController {
 mod simmodel_test {
     use super::*;
     // cargo test -- --test-threads=1　シングルスレッドで実行したいとき
-    fn print_typename<T>(_: T) {
+    /*fn print_typename<T>(_: T) {
         println!("{}", std::any::type_name::<T>());
-    }
+    }*/
 
     #[test] // StateSpaceModelのセット時のテスト 
     fn ssm_settest() {
@@ -643,7 +643,7 @@ mod simmodel_test {
         let state_def = vec![];
         let input_def = vec![];
         let output_def = vec![];
-        let model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
+        let _model = SpaceStateModel::new("model", &state_def, &input_def, &output_def, SolverType::Euler).unwrap();
     }
 
     #[test]

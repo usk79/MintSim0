@@ -1,7 +1,4 @@
 extern crate nalgebra as na;
-use na::{DVector};
-
-use anyhow::{Context};
 
 use std::f64::consts::{PI};
 

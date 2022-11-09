@@ -376,8 +376,8 @@ mod signal_test {
     #[test]
     #[should_panic]
     fn bus_tryfrom_failtest() {
-        let bus = Bus::try_from(vec![SigDef::new("b", "u"), SigDef::new("b", "u")]).unwrap();
+        let _bus = Bus::try_from(vec![SigDef::new("b", "u"), SigDef::new("b", "u")]).unwrap();
 
-        let bus = Bus::try_from(vec![Signal::new(0.0, "b", "u"), Signal::new(0.0, "b", "u")]).unwrap();
+        let _bus = Bus::try_from(vec![Signal::new(0.0, "b", "u"), Signal::new(0.0, "b", "u")]).unwrap();
     }
 }
