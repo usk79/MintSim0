@@ -233,7 +233,7 @@ mod simrun_test {
         pub fn new(init_r: f64, init_v: f64, init_theta: f64, init_omega: f64) -> Self {
             let mut state = DMatrix::from_element(4, 1, 0.0);
             let rball = 0.01; // 1[cm]
-            let mball = 0.001; // 1[g]
+            let mball = 0.01; // 1[g]
             let jball = 2.0 / 5.0 * mball * rball * rball; // 2/5mr^2
             let mbeam = 1.0; // 0.1[kg]
             let lbeam = 1.0; // 1[m] ビームの長さ
@@ -250,13 +250,13 @@ mod simrun_test {
             state[3] = init_omega.deg2rad();
 
             let input_bus = Bus::try_from(vec![SigDef::new("trq", "Nm")]).unwrap();
-            let output_bus = Bus::try_from(vec![SigDef::new("ball_pos", "m")]).unwrap();
+            let output_bus = Bus::try_from(vec![SigDef::new("ball_pos", "m"), SigDef::new("beam_angle", "deg")]).unwrap();
 
             let state_bus = Bus::try_from(vec![
                 SigDef::new("ball_r", "m"),
                 SigDef::new("ball_v", "m/s"),
-                SigDef::new("beam_angle", "deg"),
-                SigDef::new("beam_rot", "deg/s"),
+                SigDef::new("beam_t", "deg"),
+                SigDef::new("beam_w", "deg/s"),
             ]).unwrap();
 
             Self {
@@ -290,10 +290,11 @@ mod simrun_test {
         }
 
         fn nextstate(&mut self, delta_t: f64) {
-            //self.rungekutta_method(delta_t);
-            self.euler_method(delta_t);
+            self.rungekutta_method(delta_t);
+            //self.euler_method(delta_t);
 
             self.output_bus[0].value = self.x[0];
+            self.output_bus[1].value = self.x[2];
             //self.state_bus.iter_mut().enumerate().for_each(|(i, e)| e.value = self.x[i]);
             self.state_bus[0].value = self.x[0];
             self.state_bus[1].value = self.x[1];
@@ -331,8 +332,10 @@ mod simrun_test {
     struct SimBAB {
         simset: SimSet,
         bab_model: BallAndBeam,
-        controller: PIDController, 
+        beam_ctrl: PIDController, 
+        ball_ctrl: PIDController,
         scope: SimScope,
+        beambus: Bus,
         mainbus: Bus,
         ctrlbus: Bus,
         ctrlscope: SimScope,
@@ -340,21 +343,36 @@ mod simrun_test {
 
     impl SimBAB {
         fn new() -> Self {
-            let simset = SimSet::new(10.0, 0.001);
-            let mut model = BallAndBeam::new(0.1, 0.0, 0.0, 0.0);
+            let simset = SimSet::new(30.0, 0.001);
+            let mut model = BallAndBeam::new(0.0, 0.0, 0.0, 0.0);
             let mut bus_for_scope = Bus::new();
             
-            let ctrlin = vec![SigDef::new("ball_pos", "m")];
+            let ctrlin = vec![SigDef::new("beam_angle", "deg")];
             let ctrlout  = vec![SigDef::new("trq", "Nm")];
-            let target = vec![SigDef::new("target", 'm')];
-            let mut ctrl = PIDController::new(
+            let target = vec![SigDef::new("target_beam_angle", "deg")];
+            let mut beam_ctrl = PIDController::new(
                 &ctrlin, 
                 &ctrlout, 
                 &target,
-                vec![(0.1, 0.00, 0.00)], 
+                vec![(5.0, 0.5, 1.0)], 
 //                vec![(0.0, 0.0, 0.0)], 
                 SolverType::RungeKutta
             ).unwrap();
+
+            let ctrlin = vec![SigDef::new("ball_pos", "m")];
+            let ctrlout  = vec![SigDef::new("target_beam_angle", "deg")];
+            let target = vec![SigDef::new("target_pos", "m")];
+            let ball_ctrl = PIDController::new(
+                &ctrlin, 
+                &ctrlout, 
+                &target,
+                vec![(0.1, 0.0, 0.1)], 
+//                vec![(0.0, 0.0, 0.0)], 
+                SolverType::RungeKutta
+            ).unwrap();
+
+            let mut beam_bus = Bus::new();
+            beam_bus.set_sigdef(&vec![SigDef::new("beam_angle", "deg"), SigDef::new("target_beam_angle", "deg")]).unwrap();
 
             bus_for_scope.set_sigdef(&model.input_bus().get_sigdef()).unwrap();
             bus_for_scope.set_sigdef(&model.output_bus().get_sigdef()).unwrap();
@@ -363,8 +381,8 @@ mod simrun_test {
             let scope = SimScope::new(&bus_for_scope.get_sigdef(), simset.get_stepnum());
             
             let mut ctrlbus = Bus::new();
-            ctrlbus.set_sigdef(&ctrl.input_bus().get_sigdef()).unwrap();
-            ctrlbus.set_sigdef(&ctrl.output_bus().get_sigdef()).unwrap();
+            ctrlbus.set_sigdef(&beam_ctrl.input_bus().get_sigdef()).unwrap();
+            ctrlbus.set_sigdef(&beam_ctrl.output_bus().get_sigdef()).unwrap();
 
             let ctrlscope = SimScope::new(&ctrlbus.get_sigdef(), simset.get_stepnum());
 
@@ -372,8 +390,10 @@ mod simrun_test {
                 simset: simset,
                 bab_model: model,
                 scope: scope,
+                beambus: beam_bus,
                 mainbus: bus_for_scope,
-                controller: ctrl,
+                beam_ctrl,
+                ball_ctrl,
                 ctrlscope: ctrlscope,
                 ctrlbus: ctrlbus,
             }
@@ -387,36 +407,46 @@ mod simrun_test {
 
         fn init_sim(&mut self) -> anyhow::Result<()> {
             let mut trgt = Bus::new();
-            trgt.set_sigdef(&self.controller.target_bus().get_sigdef())?;
-            trgt.get_by_name_mut("target").unwrap().value = 0.0; // [m]
-            self.controller.set_target(&trgt)?;
+            trgt.set_sigdef(&self.ball_ctrl.target_bus().get_sigdef())?;
+            trgt.get_by_name_mut("target_pos").unwrap().value = 1.0; // [m]
+            self.ball_ctrl.set_target(&trgt)?;
 
             Ok(())
         }
 
         fn step_sim(&mut self, time: f64) -> anyhow::Result<()> {
             
-            self.controller.interface_in(
+            
+            self.ball_ctrl.interface_in(
                 &self.bab_model.interface_out()
             )?;
 
-            self.controller.nextstate(self.simset.get_deltat());
+            self.ball_ctrl.nextstate(self.simset.get_deltat());
 
-            self.ctrlbus.update_from_bus(&self.controller.input_bus());
-            self.ctrlbus.update_from_bus(&self.controller.output_bus());
+           // self.beambus.update_from_bus(self.ball_ctrl.output_bus());
+           // self.beambus.update_from_bus(self.bab_model.interface_out());
+
+            self.beam_ctrl.set_target(&self.ball_ctrl.output_bus())?;
+
+            self.beam_ctrl.interface_in(&self.bab_model.output_bus())?;
+
+            self.beam_ctrl.nextstate(self.simset.get_deltat());
+
+            self.ctrlbus.update_from_bus(&self.beam_ctrl.input_bus());
+            self.ctrlbus.update_from_bus(&self.beam_ctrl.output_bus());
 
             self.ctrlscope.push(time, &self.ctrlbus)?;
 
             self.bab_model.interface_in(
-                self.controller.interface_out()
+                self.beam_ctrl.interface_out()
             )?;
             self.bab_model.nextstate(self.simset.get_deltat());
 
             self.mainbus.update_from_bus(&self.bab_model.input_bus());
             self.mainbus.update_from_bus(&self.bab_model.interface_out());
             self.mainbus.update_from_bus(&self.bab_model.state_bus());
-            self.mainbus.update_from_bus(&self.controller.input_bus());
-            self.mainbus.update_from_bus(&self.controller.output_bus());
+            self.mainbus.update_from_bus(&self.beam_ctrl.input_bus());
+            self.mainbus.update_from_bus(&self.beam_ctrl.output_bus());
 
             self.scope.push(time, &self.mainbus)?;
 
@@ -425,9 +455,9 @@ mod simrun_test {
 
         fn after_sim(&mut self) -> anyhow::Result<()> {
             self.scope.export("test_output\\bab.csv")?;
-            self.scope.timeplot_all("test_output\\bab.png", (500, 500), (3, 2))?;
+            self.scope.timeplot_all("test_output\\bab.png", (500, 500), (4, 2))?;
 
-            self.ctrlscope.timeplot_all("test_output\\ctrl.png", (500, 500), (2, 1))?;
+            self.ctrlscope.timeplot_all("test_output\\ctrl.png", (500, 500), (3, 1))?;
 
             Ok(())
         }
