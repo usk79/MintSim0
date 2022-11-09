@@ -341,7 +341,7 @@ mod simrun_test {
     impl SimBAB {
         fn new() -> Self {
             let simset = SimSet::new(10.0, 0.001);
-            let mut model = BallAndBeam::new(0.1, 0.0, 0.0, 0.0);
+            let mut model = BallAndBeam::new(0.0, 0.0, 0.0, 0.0);
             let mut bus_for_scope = Bus::new();
             
             let ctrlin = vec![SigDef::new("ball_pos", "m")];
@@ -351,7 +351,7 @@ mod simrun_test {
                 &ctrlin, 
                 &ctrlout, 
                 &target,
-                vec![(0.1, 0.00, 0.00)], 
+                vec![(1.0, 0.01, 1.0)], 
 //                vec![(0.0, 0.0, 0.0)], 
                 SolverType::RungeKutta
             ).unwrap();
