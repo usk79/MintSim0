@@ -539,8 +539,7 @@ impl Model for PIDController {
         self.integrator.input_bus().iter_mut().enumerate().for_each(|(idx, sig)| {
                 let u = self.target_bus[idx].value - self.in_bus[idx].value; // 目標値 - 現在値
                 sig.value = u;
-            }
-        ); // 積分器への入力を与える
+        }); // 積分器への入力を与える
 
         self.integrator.nextstate(delta_t); // 積分する
 
