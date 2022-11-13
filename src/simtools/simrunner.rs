@@ -230,10 +230,10 @@ mod simrun_test {
     impl BallAndBeam {
         pub fn new(init_r: f64, init_v: f64, init_theta: f64, init_omega: f64) -> Self {
             let mut state = DMatrix::from_element(4, 1, 0.0);
-            let rball = 0.01; // 1[cm]
-            let mball = 0.01; // 1[g]
+            let rball = 0.1; // 10[cm]
+            let mball = 0.1; // 100[g]
             let jball = 2.0 / 5.0 * mball * rball * rball; // 2/5mr^2
-            let mbeam = 1.0; // 0.1[kg]
+            let mbeam = 1.0; // 1.0[kg]
             let lbeam = 1.0; // 1[m] ビームの長さ
             let wbeam = 0.05; // 5[cm]　ビームの幅
             let mu = 0.3; // 転がり抵抗係数
@@ -353,7 +353,8 @@ mod simrun_test {
                 &target,
                 vec![(5.0, 0.5, 1.0)], 
 //                vec![(0.0, 0.0, 0.0)], 
-                SolverType::RungeKutta
+                vec![(-5.0, 5.0)],
+                SolverType::RungeKutta,
             ).unwrap();
 
             let ctrlin = vec![SigDef::new("ball_pos", "m")];
@@ -363,8 +364,9 @@ mod simrun_test {
                 &ctrlin, 
                 &ctrlout, 
                 &target,
-                vec![(0.1, 0.0, 0.1)], 
+                vec![(1.0, 0.0, 1.0)], 
 //                vec![(0.0, 0.0, 0.0)], 
+                vec![(-5.0, 5.0)],
                 SolverType::RungeKutta
             ).unwrap();
 
@@ -401,7 +403,7 @@ mod simrun_test {
         fn init_sim(&mut self) -> anyhow::Result<()> {
             let mut trgt = Bus::new();
             trgt.set_sigdef(&self.ball_ctrl.target_bus().get_sigdef())?;
-            trgt.get_by_name_mut("target_pos").unwrap().value = 1.0; // [m]
+            trgt.get_by_name_mut("target_pos").unwrap().value = 0.5; // [m]
             self.ball_ctrl.set_target(&trgt)?;
 
             Ok(())

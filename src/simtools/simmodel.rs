@@ -7,6 +7,8 @@ use na::{DMatrix};
 
 use anyhow::{Context};
 
+use super::simcommon::Saturation;
+
 
 /// Modelトレイト
 pub trait Model {
@@ -469,11 +471,12 @@ pub struct PIDController {
     in_bus: Bus,
     out_bus: Bus,
     target_bus: Bus, // 目標値入力用
-    gain_vec: Vec<(f64, f64, f64)> // PIDゲイン配列
+    gain_vec: Vec<(f64, f64, f64)>, // PIDゲイン配列
+    minmax: Vec<(f64, f64)>, // 出力の上下限
 }
 
 impl PIDController {
-    pub fn new(input_def: &Vec<SigDef>, output_def: &Vec<SigDef>, target_def: &Vec<SigDef>, gain_vec: Vec<(f64, f64, f64)>, solvertype: SolverType) -> anyhow::Result<Self> {
+    pub fn new(input_def: &Vec<SigDef>, output_def: &Vec<SigDef>, target_def: &Vec<SigDef>, gain_vec: Vec<(f64, f64, f64)>, minmax: Vec<(f64, f64)>, solvertype: SolverType) -> anyhow::Result<Self> {
         let elemnum = input_def.len();
         if elemnum != output_def.len() || elemnum != gain_vec.len() || elemnum != target_def.len() {
             return Err(anyhow!("PIDController: 入力信号/出力信号/目標値信号/ゲインベクトルの要素数は等しく設定してください。"))
@@ -502,6 +505,7 @@ impl PIDController {
             out_bus: output_bus,
             target_bus: target_bus,
             gain_vec: gain_vec,
+            minmax: minmax,
         })
     }
 
@@ -548,7 +552,8 @@ impl Model for PIDController {
             let gain = self.gain_vec[idx];
             let integ = self.integrator.interface_out()[idx].value; // 積分器の結果を取得
             let diff = (u - self.u_old[idx]) / delta_t; // 単純微分
-            out.value = gain.0 * u + gain.1 * integ + gain.2 * diff; // 出力計算
+            let o = gain.0 * u + gain.1 * integ + gain.2 * diff; // 出力計算
+            out.value = o.guard_minmax(self.minmax[idx]);
             self.u_old[idx] = u; // 前回値更新
         });
 
