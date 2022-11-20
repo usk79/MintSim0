@@ -84,10 +84,10 @@ impl<T> SimRunner<T>
 #[cfg(test)]
 mod simrun_test {
     use super::*;
-    use crate::simtools::signal::{*};
-    use crate::simtools::simscope::{*};
-    use crate::simtools::simmodel::{*};
-    use crate::simtools::simcommon::{*};
+    use crate::simcore::signal::{*};
+    use crate::simcore::simscope::{*};
+    use crate::simcore::simmodel::{*};
+    use crate::simcore::simcommon::{*};
     use std::f64::consts::{PI};
     use nalgebra::DMatrix;
 
@@ -214,13 +214,13 @@ mod simrun_test {
 
     struct BallAndBeam {
         x: DMatrix<f64>, // 状態ベクトル
-        rball: f64, // ボールの半径[m]
+        _rball: f64, // ボールの半径[m]
         mball: f64, // ボール重量[kg]
         jball: f64, // ボールの慣性モーメント[kg・m^2]
         jbeam: f64, // ビームの慣性モーメント[kg・,^2]
-        mu: f64, // ボールの転がり抵抗係数[-]
-        k: f64, // 空気抵抗係数[N/(m/s)^2]
-        m0: f64, // 途中計算
+        _mu: f64, // ボールの転がり抵抗係数[-]
+        _k: f64, // 空気抵抗係数[N/(m/s)^2]
+        _m0: f64, // 途中計算
         m1: f64, // 途中計算
         u: Bus, // 入力バス(入力トルク)
         output_bus: Bus, // 出力バス
@@ -259,13 +259,13 @@ mod simrun_test {
 
             Self {
                 x: state,
-                rball: rball, 
+                _rball: rball, 
                 mball: mball,
                 jball: jball,
                 jbeam: jbeam,
-                k: k,
-                mu: mu,
-                m0: m0,
+                _k: k,
+                _mu: mu,
+                _m0: m0,
                 m1: m1,
                 u: input_bus,
                 output_bus: output_bus,

@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::simtools::signal::{*};
+use crate::simcore::signal::{*};
 
 extern crate nalgebra as na;
 use na::{DMatrix};

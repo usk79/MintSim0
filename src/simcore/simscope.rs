@@ -2,7 +2,7 @@
 use std::fs::File;
 use std::io::{Write, BufWriter};
 
-use crate::simtools::signal::{*};
+use crate::simcore::signal::{*};
 use anyhow::{*};
 
 use plotters::prelude::*;

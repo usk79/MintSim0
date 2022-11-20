@@ -2,4 +2,4 @@
 #[macro_use]
 extern crate anyhow;
 
-pub mod simtools;
+pub mod simcore;
